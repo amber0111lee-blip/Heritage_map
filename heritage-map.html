@@ -1,0 +1,2011 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>历史印记 - 武汉抗战旧址地图</title>
+    <!-- Supabase 客户端库 -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- 高德地图 API -->
+    <script src="https://webapi.amap.com/maps?v=2.0&key=e4f9114d0564a5cbb8854bdde336a3b1&plugin=AMap.Geocoder,AMap.Driving,AMap.Walking,AMap.Transfer,AMap.Riding"></script>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;600;700;900&family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
+        
+        :root {
+            --primary-dark: #1a1a1a;
+            --secondary-dark: #2d2d2d;
+            --accent-red: #c41e3a;
+            --accent-gold: #d4af37;
+            --text-light: #f5f5f5;
+            --text-gray: #b0b0b0;
+            --bg-overlay: rgba(0, 0, 0, 0.85);
+            --border-color: rgba(212, 175, 55, 0.3);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            color: var(--text-light);
+            overflow-x: hidden;
+        }
+        
+        /* Header Styles */
+        header {
+            background: linear-gradient(180deg, rgba(26, 26, 26, 0.95) 0%, rgba(26, 26, 26, 0.8) 100%);
+            backdrop-filter: blur(10px);
+            border-bottom: 2px solid var(--border-color);
+            padding: 2rem 3rem;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+        
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        h1 {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 2.5rem;
+            font-weight: 900;
+            letter-spacing: 0.5rem;
+            background: linear-gradient(135deg, var(--accent-gold) 0%, #fff 50%, var(--accent-gold) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 30px rgba(212, 175, 55, 0.3);
+            position: relative;
+            padding-bottom: 0.5rem;
+        }
+        
+        h1::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 60px;
+            height: 3px;
+            background: var(--accent-red);
+            box-shadow: 0 0 10px var(--accent-red);
+        }
+        
+        .subtitle {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 1.1rem;
+            color: var(--text-gray);
+            margin-top: 0.5rem;
+            letter-spacing: 0.3rem;
+        }
+        
+        nav {
+            display: flex;
+            gap: 2rem;
+        }
+        
+        nav button {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-light);
+            padding: 0.8rem 1.8rem;
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            font-weight: 500;
+        }
+        
+        nav button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.2), transparent);
+            transition: left 0.5s ease;
+        }
+        
+        nav button:hover::before {
+            left: 100%;
+        }
+        
+        nav button:hover {
+            border-color: var(--accent-gold);
+            box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        /* Main Container */
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 3rem;
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 3rem;
+            min-height: calc(100vh - 200px);
+        }
+        
+        /* Map Container */
+        .map-section {
+            background: rgba(45, 45, 45, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            position: relative;
+        }
+        
+        .map-header {
+            background: linear-gradient(90deg, var(--accent-red) 0%, #8b1425 100%);
+            padding: 1.5rem 2rem;
+            border-bottom: 2px solid var(--accent-gold);
+        }
+        
+        .map-header h2 {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: 0.2rem;
+        }
+        
+        .map-description {
+            margin-top: 0.8rem;
+            font-size: 0.95rem;
+            color: rgba(255, 255, 255, 0.9);
+            line-height: 1.6;
+        }
+        
+        #map {
+            height: 700px;
+            width: 100%;
+            background: #1a1a1a;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            background: rgba(45, 45, 45, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            max-height: 850px;
+            overflow-y: auto;
+        }
+        
+        .sidebar::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .sidebar::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.3);
+        }
+        
+        .sidebar::-webkit-scrollbar-thumb {
+            background: var(--accent-gold);
+            border-radius: 4px;
+        }
+        
+        .sidebar h3 {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--accent-red);
+            color: var(--accent-gold);
+            letter-spacing: 0.15rem;
+        }
+        
+        .location-item {
+            background: rgba(26, 26, 26, 0.6);
+            border: 1px solid rgba(212, 175, 55, 0.2);
+            padding: 1.2rem;
+            margin-bottom: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .location-item::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 3px;
+            height: 0;
+            background: var(--accent-red);
+            transition: height 0.3s ease;
+        }
+        
+        .location-item:hover {
+            border-color: var(--accent-gold);
+            background: rgba(26, 26, 26, 0.9);
+            transform: translateX(5px);
+            box-shadow: 0 4px 20px rgba(212, 175, 55, 0.2);
+        }
+        
+        .location-item:hover::before {
+            height: 100%;
+        }
+        
+        .location-number {
+            display: inline-block;
+            background: var(--accent-red);
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 28px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            margin-right: 0.8rem;
+            box-shadow: 0 2px 8px rgba(196, 30, 58, 0.4);
+        }
+        
+        .location-name {
+            font-weight: 600;
+            font-size: 1.05rem;
+            color: var(--text-light);
+            margin-bottom: 0.5rem;
+        }
+        
+        .location-address {
+            font-size: 0.85rem;
+            color: var(--text-gray);
+            line-height: 1.5;
+        }
+        
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-overlay);
+            backdrop-filter: blur(8px);
+            z-index: 2000;
+            overflow-y: auto;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .modal-content {
+            background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%);
+            max-width: 900px;
+            margin: 3rem auto;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+            animation: slideUp 0.4s ease;
+            position: relative;
+        }
+        
+        @keyframes slideUp {
+            from { 
+                transform: translateY(50px);
+                opacity: 0;
+            }
+            to { 
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        .modal-header {
+            background: linear-gradient(90deg, var(--accent-red) 0%, #8b1425 100%);
+            padding: 2rem 2.5rem;
+            border-bottom: 3px solid var(--accent-gold);
+            position: relative;
+        }
+        
+        .modal-header h2 {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: 0.1rem;
+            margin-bottom: 0.8rem;
+        }
+        
+        .modal-header .address {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .close-btn {
+            position: absolute;
+            top: 1.5rem;
+            right: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            font-size: 1.8rem;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+        
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: rotate(90deg);
+        }
+        
+        .modal-body {
+            padding: 2.5rem;
+        }
+        
+        .section {
+            margin-bottom: 2.5rem;
+        }
+        
+        .section-title {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 1.4rem;
+            color: var(--accent-gold);
+            margin-bottom: 1.2rem;
+            padding-bottom: 0.8rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+        }
+        
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: var(--accent-red);
+            display: inline-block;
+        }
+        
+        .section-content {
+            color: var(--text-gray);
+            line-height: 1.8;
+            font-size: 1rem;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+            margin-top: 1rem;
+        }
+        
+        .info-item {
+            background: rgba(26, 26, 26, 0.6);
+            padding: 1.2rem;
+            border-left: 3px solid var(--accent-gold);
+        }
+        
+        .info-label {
+            font-size: 0.85rem;
+            color: var(--text-gray);
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1rem;
+        }
+        
+        .info-value {
+            font-size: 1.1rem;
+            color: var(--text-light);
+            font-weight: 500;
+        }
+        
+        /* Comments Section */
+        .comment {
+            background: rgba(26, 26, 26, 0.4);
+            padding: 1.5rem;
+            margin-bottom: 1.2rem;
+            border-left: 3px solid var(--accent-gold);
+        }
+        
+        .comment-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.8rem;
+        }
+        
+        .comment-author {
+            font-weight: 600;
+            color: var(--accent-gold);
+        }
+        
+        .comment-date {
+            font-size: 0.85rem;
+            color: var(--text-gray);
+        }
+        
+        .comment-text {
+            color: var(--text-gray);
+            line-height: 1.6;
+            margin-bottom: 0.8rem;
+        }
+        
+        .comment-rating {
+            color: var(--accent-gold);
+            font-size: 0.95rem;
+        }
+        
+        .add-comment {
+            margin-top: 1.5rem;
+        }
+        
+        .add-comment textarea {
+            width: 100%;
+            background: rgba(26, 26, 26, 0.6);
+            border: 1px solid var(--border-color);
+            color: var(--text-light);
+            padding: 1rem;
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 0.95rem;
+            resize: vertical;
+            min-height: 100px;
+            margin-bottom: 1rem;
+        }
+        
+        .add-comment button {
+            background: var(--accent-red);
+            color: white;
+            border: none;
+            padding: 0.8rem 2rem;
+            font-family: 'Noto Sans SC', sans-serif;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.1rem;
+        }
+        
+        .add-comment button:hover {
+            background: #a01828;
+            box-shadow: 0 4px 20px rgba(196, 30, 58, 0.4);
+            transform: translateY(-2px);
+        }
+        
+        /* Route Planning */
+        .route-controls {
+            background: rgba(26, 26, 26, 0.6);
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border: 1px solid var(--border-color);
+        }
+        
+        .checkbox-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            margin-bottom: 0.8rem;
+            cursor: pointer;
+            padding: 0.5rem;
+            transition: background 0.3s ease;
+        }
+        
+        .checkbox-group label:hover {
+            background: rgba(212, 175, 55, 0.1);
+        }
+        
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        
+        .route-button {
+            width: 100%;
+            background: var(--accent-red);
+            color: white;
+            border: none;
+            padding: 1rem;
+            font-family: 'Noto Serif SC', serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            letter-spacing: 0.2rem;
+            text-transform: uppercase;
+        }
+        
+        .route-button:hover {
+            background: #a01828;
+            box-shadow: 0 6px 25px rgba(196, 30, 58, 0.5);
+            transform: translateY(-2px);
+        }
+        
+        .route-result {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: rgba(26, 26, 26, 0.6);
+            border-left: 4px solid var(--accent-gold);
+        }
+        
+        .route-segment {
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background: rgba(45, 45, 45, 0.5);
+            border: 1px solid rgba(212, 175, 55, 0.2);
+        }
+        
+        .route-segment-header {
+            font-weight: 600;
+            margin-bottom: 0.8rem;
+            color: var(--accent-gold);
+            font-size: 1.05rem;
+        }
+        
+        .transport-options {
+            display: flex;
+            gap: 1rem;
+            margin-top: 0.8rem;
+            flex-wrap: wrap;
+        }
+        
+        .transport-btn {
+            background: rgba(212, 175, 55, 0.1);
+            border: 1px solid var(--accent-gold);
+            color: var(--accent-gold);
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .transport-btn:hover {
+            background: var(--accent-gold);
+            color: var(--primary-dark);
+        }
+        
+        /* Leaflet Custom Styles */
+        .leaflet-popup-content-wrapper {
+            background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%);
+            color: var(--text-light);
+            border: 2px solid var(--accent-gold);
+            border-radius: 4px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+        }
+        
+        .leaflet-popup-content {
+            margin: 1rem;
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+        
+        .leaflet-popup-tip {
+            background: #2d2d2d;
+            border: 2px solid var(--accent-gold);
+        }
+        
+        .popup-title {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--accent-gold);
+            margin-bottom: 0.5rem;
+        }
+        
+        .popup-address {
+            font-size: 0.85rem;
+            color: var(--text-gray);
+            margin-bottom: 0.8rem;
+        }
+        
+        .popup-btn {
+            background: var(--accent-red);
+            color: white;
+            border: none;
+            padding: 0.6rem 1.2rem;
+            cursor: pointer;
+            font-family: 'Noto Sans SC', sans-serif;
+            font-weight: 600;
+            width: 100%;
+            transition: all 0.3s ease;
+        }
+        
+        .popup-btn:hover {
+            background: #a01828;
+        }
+        
+        /* Loading Animation */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(212, 175, 55, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--accent-gold);
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 1200px) {
+            .container {
+                grid-template-columns: 1fr;
+                padding: 2rem;
+            }
+            
+            .sidebar {
+                max-height: 600px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            header {
+                padding: 1.5rem;
+            }
+            
+            h1 {
+                font-size: 1.8rem;
+                letter-spacing: 0.3rem;
+            }
+            
+            .subtitle {
+                font-size: 0.9rem;
+            }
+            
+            nav {
+                flex-direction: column;
+                gap: 0.8rem;
+            }
+            
+            .container {
+                padding: 1rem;
+                gap: 2rem;
+            }
+            
+            #map {
+                height: 500px;
+            }
+            
+            .modal-content {
+                margin: 1rem;
+            }
+            
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div>
+                <h1>历史印记</h1>
+                <p class="subtitle">探寻历史 · 铭记过往</p>
+            </div>
+            <nav>
+                <button onclick="showRouteModal()">路线规划</button>
+                <button onclick="showCreateMapModal()">创建地图</button>
+            </nav>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="map-section">
+            <div class="map-header">
+                <h2>武汉抗战旧址</h2>
+                <p class="map-description">1937-1945年间，武汉作为战时首都和重要战场，留下了众多抗战遗迹。这些历史建筑和纪念地见证了中华民族抗击侵略的英勇历程，承载着不可磨灭的历史记忆。</p>
+            </div>
+            <div id="map"></div>
+        </div>
+
+        <div class="sidebar">
+            <h3>地点列表</h3>
+            <div id="locationList"></div>
+        </div>
+    </div>
+
+    <!-- Location Detail Modal -->
+    <div id="detailModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle"></h2>
+                <p class="address" id="modalAddress"></p>
+                <button class="close-btn" onclick="closeModal('detailModal')">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Content will be dynamically loaded -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Route Planning Modal -->
+    <div id="routeModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>路线规划</h2>
+                <button class="close-btn" onclick="closeModal('routeModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="route-controls">
+                    <div class="section-title">选择游览地点</div>
+                    <div class="checkbox-group" id="routeCheckboxes"></div>
+                    
+                    <div class="section-title" style="margin-top: 2rem;">起点与终点</div>
+                    <div class="info-grid">
+                        <div>
+                            <label class="info-label">起点位置</label>
+                            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <label style="display: flex; align-items: center; gap: 0.3rem;">
+                                    <input type="radio" name="startType" value="preset" checked onchange="toggleStartInput()"> 选择地点
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.3rem;">
+                                    <input type="radio" name="startType" value="custom" onchange="toggleStartInput()"> 自定义地址
+                                </label>
+                            </div>
+                            <select id="startPoint" style="width: 100%; padding: 0.8rem; background: rgba(26, 26, 26, 0.6); border: 1px solid var(--border-color); color: var(--text-light);">
+                                <option value="">请选择起点</option>
+                            </select>
+                            <input type="text" id="customStartAddress" placeholder="输入起点地址，例如：武汉站" style="width: 100%; padding: 0.8rem; background: rgba(26, 26, 26, 0.6); border: 1px solid var(--border-color); color: var(--text-light); display: none;">
+                        </div>
+                        <div>
+                            <label class="info-label">终点位置</label>
+                            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <label style="display: flex; align-items: center; gap: 0.3rem;">
+                                    <input type="radio" name="endType" value="preset" checked onchange="toggleEndInput()"> 选择地点
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.3rem;">
+                                    <input type="radio" name="endType" value="custom" onchange="toggleEndInput()"> 自定义地址
+                                </label>
+                            </div>
+                            <select id="endPoint" style="width: 100%; padding: 0.8rem; background: rgba(26, 26, 26, 0.6); border: 1px solid var(--border-color); color: var(--text-light);">
+                                <option value="">请选择终点</option>
+                            </select>
+                            <input type="text" id="customEndAddress" placeholder="输入终点地址，例如：天河机场" style="width: 100%; padding: 0.8rem; background: rgba(26, 26, 26, 0.6); border: 1px solid var(--border-color); color: var(--text-light); display: none;">
+                        </div>
+                    </div>
+                    
+                    <div class="section-title" style="margin-top: 2rem;">游览顺序</div>
+                    <div style="display: flex; gap: 1rem;">
+                        <label style="flex: 1;">
+                            <input type="radio" name="routeOrder" value="nearest" checked> 从近到远
+                        </label>
+                        <label style="flex: 1;">
+                            <input type="radio" name="routeOrder" value="farthest"> 从远到近
+                        </label>
+                    </div>
+                    
+                    <button class="route-button" onclick="generateRoute()" style="margin-top: 2rem;">生成路线</button>
+                </div>
+                
+                <div id="routeResult"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login/Register Modal -->
+    <div id="loginModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 id="authModalTitle">登录</h2>
+                <button class="close-btn" onclick="closeModal('loginModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="loginForm">
+                    <div style="margin-bottom: 1.5rem;">
+                        <label style="display: block; margin-bottom: 0.5rem; color: var(--text-gray);">邮箱</label>
+                        <input type="email" id="loginEmail" placeholder="请输入邮箱" style="width: 100%; padding: 0.8rem; background: rgba(26, 26, 26, 0.6); border: 1px solid var(--border-color); color: var(--text-light);">
+                    </div>
+                
+                    <div style="margin-bottom: 1.5rem;">
+                        <label style="display: block; margin-bottom: 0.5rem; color: var(--text-gray);">密码</label>
+                        <input type="password" id="loginPassword" placeholder="请输入密码" style="width: 100%; padding: 0.8rem; background: rgba(26, 26, 26, 0.6); border: 1px solid var(--border-color); color: var(--text-light);">
+                    </div>
+                
+                    <div id="signupNameField" style="margin-bottom: 1.5rem; display: none;">
+                        <label style="display: block; margin-bottom: 0.5rem; color: var(--text-gray);">昵称</label>
+                        <input type="text" id="signupName" placeholder="请输入昵称" style="width: 100%; padding: 0.8rem; background: rgba(26, 26, 26, 0.6); border: 1px solid var(--border-color); color: var(--text-light);">
+                    </div>
+                
+                    <button id="authSubmitBtn" onclick="handleAuth()" class="route-button" style="margin-top: 1rem;">登录</button>
+                    
+                    <div style="text-align: center; margin-top: 1.5rem;">
+                        <span style="color: var(--text-gray);" id="authSwitchText">还没有账号？</span>
+                        <button onclick="switchAuthMode()" style="background: transparent; border: none; color: var(--accent-gold); cursor: pointer; text-decoration: underline;" id="authSwitchBtn">注册</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    let isLoginMode = true;
+        
+    function showLoginModal() {
+        document.getElementById('loginModal').style.display = 'block';
+        isLoginMode = true;
+        updateAuthModalUI();
+    }
+  
+    function switchAuthMode() {
+        isLoginMode = !isLoginMode;
+        updateAuthModalUI();
+    }
+  
+    function updateAuthModalUI() {
+        const title = document.getElementById('authModalTitle');
+        const submitBtn = document.getElementById('authSubmitBtn');
+        const switchText = document.getElementById('authSwitchText');
+        const switchBtn = document.getElementById('authSwitchBtn');
+        const nameField = document.getElementById('signupNameField');
+        
+        if (isLoginMode) {
+        title.textContent = '登录';
+        submitBtn.textContent = '登录';
+        switchText.textContent = '还没有账号？';
+        switchBtn.textContent = '注册';
+        nameField.style.display = 'none';
+        } else {
+        title.textContent = '注册';
+        submitBtn.textContent = '注册';
+        switchText.textContent = '已有账号？';
+        switchBtn.textContent = '登录';
+        nameField.style.display = 'block';
+        }
+    }
+  
+    async function handleAuth() {
+        const email = document.getElementById('loginEmail').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        const displayName = document.getElementById('signupName')?.value.trim() || null;
+    
+        if (!email || !password) {
+        alert('请填写邮箱和密码');
+        return;
+        }
+    
+        if (isLoginMode) {
+        // 登录
+        const result = await AuthSystem.signIn(email, password);
+        if (result.success) {
+            alert('登录成功！');
+            closeModal('loginModal');
+            location.reload();
+        } else {
+            alert('登录失败：' + result.error);
+        }
+        } else {
+        // 注册
+        const displayName = document.getElementById('signupName').value.trim();
+        if (!displayName) {
+            alert('请输入昵称');
+            return;
+        }
+      
+        const result = await AuthSystem.signUp(email, password, displayName);
+        if (result.success) {
+            alert('注册成功！请查收验证邮件（如果启用了邮箱验证）');
+            closeModal('loginModal');
+            location.reload();
+        } else {
+            alert('注册失败：' + result.error);
+        }
+        }
+    }
+    </script>
+
+
+    <script>
+        // Location data with coordinates (武汉市中心坐标范围)
+        const locations = [
+            {
+                id: 1,
+                name: "汉口碉堡群",
+                address: "江岸区惠济二路地铁D口东南50米",
+                lat: 30.6051,
+                lng: 114.2905,
+                description: "这些碉堡建于1938年武汉会战期间,是当时国民政府为抵御日军进攻而修建的防御工事。碉堡群采用钢筋混凝土结构,墙体厚度达1米以上,设有射击孔和观察窗。这些军事遗迹见证了武汉会战的激烈战况,是研究抗战军事防御的重要实物资料。",
+                architecture: {
+                    style: "军事防御建筑",
+                    year: "1938年",
+                    builder: "国民政府军事委员会"
+                },
+                openTime: "全天开放(户外遗址)",
+                ticket: "免费",
+                images: ["https://images.unsplash.com/photo-1590073242678-70ee3fc28e8e?w=800"],
+                comments: [
+                    {
+                        author: "历史爱好者",
+                        date: "2024-01-15",
+                        rating: 5,
+                        text: "保存相对完好的抗战遗迹,站在碉堡前仿佛能感受到当年战火纷飞的场景。希望能加强保护和宣传。"
+                    }
+                ]
+            },
+            {
+                id: 2,
+                name: "王家墩公园",
+                address: "江岸区万松街办事处清江路",
+                lat: 30.6015,
+                lng: 114.2725,
+                description: "原为王家墩机场旧址。1938年国民政府迁至武汉后,这里成为中国空军抗战指挥中心。众多中国空军飞行员从这里起飞,与日军航空兵展开激烈空战。著名的武汉空战就以此为主要基地。现已改建为公园,但仍保留部分历史遗迹,纪念那些为国捐躯的空军英烈。",
+                architecture: {
+                    style: "军用机场(已改建为公园)",
+                    year: "1930年代建成机场",
+                    builder: "国民政府航空委员会"
+                },
+                openTime: "06:00-22:00",
+                ticket: "免费",
+                images: ["https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=800"],
+                comments: []
+            },
+            {
+                id: 3,
+                name: "苏联空军烈士墓",
+                address: "解放公园路42号解放公园内",
+                lat: 30.5969,
+                lng: 114.2923,
+                description: "1938年,苏联政府派遣空军志愿队援华抗战,与中国空军并肩作战。在武汉保卫战中,15名苏联飞行员壮烈牺牲。烈士墓于1956年修建,墓碑上镌刻着烈士名字,墓前矗立着纪念碑。这座墓地见证了中苏两国人民在反法西斯战争中的深厚友谊。",
+                architecture: {
+                    style: "纪念性建筑",
+                    year: "1956年",
+                    builder: "武汉市政府"
+                },
+                openTime: "06:00-22:00(解放公园开放时间)",
+                ticket: "免费",
+                images: ["https://images.unsplash.com/photo-1553531384-cc64ac80f931?w=800"],
+                comments: [
+                    {
+                        author: "退伍军人",
+                        date: "2024-02-01",
+                        rating: 5,
+                        text: "向英勇的苏联飞行员致敬!他们远离祖国,为中国人民的解放事业献出了宝贵生命。"
+                    }
+                ]
+            },
+            {
+                id: 4,
+                name: "八路军武汉办事处旧址",
+                address: "江岸区长春街57号",
+                lat: 30.5891,
+                lng: 114.2856,
+                description: "1937年抗战全面爆发后,中国共产党在此设立八路军驻武汉办事处,对外称'国民革命军第十八集团军驻汉办事处'。周恩来、董必武、叶剑英等曾在此工作。办事处负责统战工作、宣传抗日、输送进步青年到延安等重要任务,是抗战时期中共在南方的重要据点。建筑为三层砖木结构西式楼房,现为全国重点文物保护单位。",
+                architecture: {
+                    style: "近代西式建筑",
+                    year: "20世纪初",
+                    builder: "不详"
+                },
+                openTime: "09:00-17:00(周一闭馆)",
+                ticket: "免费(需预约)",
+                images: ["https://images.unsplash.com/photo-1564583138697-34f7b7488f94?w=800"],
+                comments: [
+                    {
+                        author: "党史研究者",
+                        date: "2024-01-20",
+                        rating: 5,
+                        text: "非常重要的革命遗址,讲解员专业,展览丰富。建议提前预约,周末人较多。"
+                    }
+                ]
+            },
+            {
+                id: 5,
+                name: "汉口新四军军部旧址",
+                address: "江岸区胜利街332-352号",
+                lat: 30.5876,
+                lng: 114.2912,
+                description: "1937年12月,新四军军部在此成立,叶挺任军长,项英任副军长。军部在此期间筹建新四军,整编南方八省游击队,开展抗日宣传。1938年1月军部迁往南昌。建筑群由多栋建筑组成,为典型的汉口近代里弄住宅,现保存完好,是研究新四军历史的重要实物见证。",
+                architecture: {
+                    style: "近代里弄建筑",
+                    year: "20世纪初",
+                    builder: "不详"
+                },
+                openTime: "09:00-17:00(周一闭馆)",
+                ticket: "免费",
+                images: ["https://images.unsplash.com/photo-1555881543-71cb8ac11080?w=800"],
+                comments: []
+            },
+            {
+                id: 6,
+                name: "江汉关大楼",
+                address: "江汉区沿江大道129号",
+                lat: 30.5783,
+                lng: 114.2837,
+                description: "建于1924年,是武汉的标志性建筑。抗战期间,江汉关见证了武汉会战的惨烈。1938年10月武汉沦陷前,大楼遭受日军飞机多次轰炸,顶部钟楼受损。大楼采用古典复兴式建筑风格,主体四层,钟楼高度46.3米,是当时长江流域最高建筑。现为全国重点文物保护单位,内设江汉关博物馆。",
+                architecture: {
+                    style: "古典复兴式建筑",
+                    year: "1924年",
+                    builder: "景明洋行设计,新泰记营造厂承建"
+                },
+                openTime: "09:00-17:00(周一闭馆)",
+                ticket: "免费(需预约)",
+                images: ["https://images.unsplash.com/photo-1486299267070-83823f5448dd?w=800"],
+                comments: [
+                    {
+                        author: "建筑爱好者",
+                        date: "2024-02-10",
+                        rating: 5,
+                        text: "建筑精美,历史厚重。登上钟楼可俯瞰长江美景,博物馆展览也很精彩。"
+                    }
+                ]
+            },
+            {
+                id: 7,
+                name: "一元路小学",
+                address: "江岸区一元路",
+                lat: 30.5923,
+                lng: 114.2867,
+                description: "原为战时第一儿童临时保育会旧址。1938年3月,在宋美龄倡导下成立,邓颖超担任常务理事。保育会收容救济战区难童,高峰时收容儿童达3万余名,体现了国共合作、全民抗战的精神。这是抗战时期规模最大的儿童救济机构,为保护战争中的儿童做出了重要贡献。",
+                architecture: {
+                    style: "学校建筑",
+                    year: "20世纪初",
+                    builder: "不详"
+                },
+                openTime: "仅外观参观",
+                ticket: "不对外开放",
+                images: ["https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=800"],
+                comments: []
+            },
+            {
+                id: 8,
+                name: "武汉总商会",
+                address: "江汉路商圈中山大道489号",
+                lat: 30.5812,
+                lng: 114.2798,
+                description: "原汉口总商会旧址,也是文艺界抗敌协会旧址。1938年3月27日,中华全国文艺界抗敌协会在此宣告成立,老舍任常务理事,集结了郭沫若、茅盾、巴金、冰心等众多文艺界名人。协会通过文学、戏剧、音乐等形式宣传抗日,在文化战线上发挥了重要作用。建筑为近代西式商业建筑,现为商业用途。",
+                architecture: {
+                    style: "近代西式商业建筑",
+                    year: "1920年代",
+                    builder: "汉口商会"
+                },
+                openTime: "商业区,全天开放",
+                ticket: "免费",
+                images: ["https://images.unsplash.com/photo-1497366216548-37526070297c?w=800"],
+                comments: [
+                    {
+                        author: "文学青年",
+                        date: "2024-01-25",
+                        rating: 4,
+                        text: "能在这里感受到当年文艺工作者投身抗战的热情。建筑保护得不错,但缺少相关标识说明。"
+                    }
+                ]
+            },
+            {
+                id: 9,
+                name: "日租界军官宿舍旧址",
+                address: "江岸区胜利街262-272号",
+                lat: 30.5869,
+                lng: 114.2898,
+                description: "原为日本租界内的军官宿舍,是日本侵华的历史罪证。建筑群反映了日本在华租界的建筑特色和侵略扩张的野心。抗战胜利后收回,这些建筑见证了中华民族从屈辱走向胜利的历程。现为居民区,部分建筑保存尚好。",
+                architecture: {
+                    style: "日式建筑",
+                    year: "1920-1930年代",
+                    builder: "日本租界当局"
+                },
+                openTime: "居民区,仅外观参观",
+                ticket: "免费",
+                images: ["https://images.unsplash.com/photo-1566908829550-e6551b00979b?w=800"],
+                comments: []
+            },
+            {
+                id: 10,
+                name: "汉口慰安所旧址",
+                address: "江汉区民权街办事处民权街积庆社区",
+                lat: 30.5834,
+                lng: 114.2756,
+                description: "这是世界上现存的唯一完整日军慰安所旧址,是日军侵华罪行的铁证。建筑群保存了慰安所的原始格局,包括接待室、慰安妇居室等。这些建筑是日军强征慰安妇、实施性暴力犯罪的历史见证,具有重要的史料价值和警示意义。现已作为文物保护单位,对研究日军罪行有重要意义。",
+                architecture: {
+                    style: "近代里弄建筑",
+                    year: "20世纪初(沦陷期间被日军占用)",
+                    builder: "不详"
+                },
+                openTime: "需预约参观",
+                ticket: "免费",
+                images: ["https://images.unsplash.com/photo-1577495508048-b635879837f1?w=800"],
+                comments: [
+                    {
+                        author: "和平使者",
+                        date: "2024-02-05",
+                        rating: 5,
+                        text: "沉重的历史,不能忘记。这些罪证必须永久保存,警示后人珍惜和平。"
+                    }
+                ]
+            },
+            {
+                id: 11,
+                name: "史沫特莱旧居",
+                address: "江岸区鄱阳街32号",
+                lat: 30.5898,
+                lng: 114.2889,
+                description: "美国记者史沫特莱(Agnes Smedley)1938年在武汉的住所。史沫特莱是著名的国际友人,长期支持中国革命和抗战事业。她在武汉期间采访报道了八路军、新四军的抗战事迹,向世界传播了中国人民抗战的真实情况。建筑为典型的汉口近代里弄住宅,现保存基本完好。",
+                architecture: {
+                    style: "近代里弄建筑",
+                    year: "20世纪初",
+                    builder: "不详"
+                },
+                openTime: "居民区,仅外观参观",
+                ticket: "免费",
+                images: ["https://images.unsplash.com/photo-1516156008625-3a9d6067fab5?w=800"],
+                comments: []
+            },
+            {
+                id: 12,
+                name: "汉阳兵工厂旧址",
+                address: "汉阳区琴台大道南区5栋",
+                lat: 30.5512,
+                lng: 114.2678,
+                description: "1890年,湖广总督张之洞创建汉阳铁厂和汉阳兵工厂,标志着中国近代工业的开端。兵工厂制造的'汉阳造'步枪成为中国军队的主要武器。1911年,武昌起义的革命军正是使用汉阳造打响了辛亥革命第一枪。抗战期间,兵工厂迁往重庆继续生产武器支援抗战。现存部分厂房和设施,是中国近代工业史和军事史的重要遗存。",
+                architecture: {
+                    style: "近代工业建筑",
+                    year: "1890年",
+                    builder: "张之洞主持建造"
+                },
+                openTime: "部分区域开放,具体时间需咨询",
+                ticket: "免费",
+                images: ["https://images.unsplash.com/photo-1581092160562-40aa08e78837?w=800"],
+                comments: [
+                    {
+                        author: "工业遗产保护者",
+                        date: "2024-01-18",
+                        rating: 4,
+                        text: "中国近代工业的摇篮,历史意义重大。希望能更好地保护和开发这片工业遗产。"
+                    }
+                ]
+            },
+            {
+                id: 13,
+                name: "武汉白求恩纪念馆",
+                address: "汉阳区显正街122号",
+                lat: 30.5534,
+                lng: 114.2701,
+                description: "纪念加拿大医生诺尔曼·白求恩的纪念馆。白求恩1938年来华支援抗战,在武汉期间为伤员进行手术治疗,培训医护人员。他后来奔赴晋察冀边区,1939年因抢救伤员感染去世。白求恩的国际主义精神永远铭记在中国人民心中。纪念馆展示了白求恩在华期间的事迹和相关文物。",
+                architecture: {
+                    style: "现代纪念馆建筑",
+                    year: "20世纪末建成",
+                    builder: "武汉市政府"
+                },
+                openTime: "09:00-17:00(周一闭馆)",
+                ticket: "免费",
+                images: ["https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?w=800"],
+                comments: []
+            },
+            {
+                id: 14,
+                name: "政治部第三厅旧址",
+                address: "武昌区昙华林(现武汉市第十四中学内)",
+                lat: 30.5534,
+                lng: 114.3112,
+                description: "1938年,国民政府军事委员会政治部第三厅在此办公,这里是文艺抗战的指挥中心。郭沫若出任厅长,田汉、洪深、冼星海等文艺家在此工作。冼星海在武汉创作了不朽名作《黄河大合唱》。第三厅组织了大量抗日文艺演出和宣传活动,鼓舞了全国军民的抗战斗志。建筑位于历史文化街区昙华林内,周边还有众多近代建筑。",
+                architecture: {
+                    style: "近代建筑(现为学校)",
+                    year: "20世纪初",
+                    builder: "不详"
+                },
+                openTime: "学校内,不对外开放",
+                ticket: "不开放",
+                images: ["https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=800"],
+                comments: [
+                    {
+                        author: "音乐爱好者",
+                        date: "2024-02-15",
+                        rating: 5,
+                        text: "《黄河大合唱》诞生的地方!文艺工作者用作品唤醒民众,这种精神值得永远铭记。"
+                    }
+                ]
+            },
+            {
+                id: 15,
+                name: "武汉冯玉祥故居",
+                address: "武昌区千家街8号大院",
+                lat: 30.5456,
+                lng: 114.3089,
+                description: "著名爱国将领冯玉祥在武汉的住所。冯玉祥将军积极主张抗日,1938年在武汉期间参与抗战动员工作,支持国共合作共同抗日。他曾任国民政府军事委员会副委员长,为抗战事业做出重要贡献。故居为中西合璧式建筑,保存了部分原有陈设,展示了冯玉祥的生平事迹。",
+                architecture: {
+                    style: "中西合璧式建筑",
+                    year: "1920-1930年代",
+                    builder: "不详"
+                },
+                openTime: "需预约参观",
+                ticket: "免费",
+                images: ["https://images.unsplash.com/photo-1582407947304-fd86f028f716?w=800"],
+                comments: []
+            },
+            {
+                id: 16,
+                name: "东湖卫生疗养院",
+                address: "东湖风景区东湖宾馆内",
+                lat: 30.5612,
+                lng: 114.3845,
+                description: "原基督富临安息日会东湖卫生疗养院。抗战期间,美国医生鲍因顿(Dr. Boynton)和米勒尔在此救治大量受伤军民,每日两次施粥救济难民,成为战火中难得的庇护所。医院体现了国际友人对中国抗战的无私支持。建筑坐落在东湖风景区内,环境优美,现为东湖宾馆一部分,保留了部分历史建筑。",
+                architecture: {
+                    style: "近代西式医疗建筑",
+                    year: "1920-1930年代",
+                    builder: "基督教会"
+                },
+                openTime: "宾馆区域,需预约参观",
+                ticket: "需咨询",
+                images: ["https://images.unsplash.com/photo-1519452635265-7b1fbfd1e4e0?w=800"],
+                comments: []
+            },
+            {
+                id: 17,
+                name: "彭刘杨路武汉行营",
+                address: "湖北省水产局到梳妆台遗址周边",
+                lat: 30.5501,
+                lng: 114.3234,
+                description: "1938年国民政府迁至武汉后,蒋介石在此设立武汉行营,作为战时指挥中心,相当于临时总统府。蒋介石在此指挥武汉会战,召开重要军事会议。行营周边戒备森严,是当时武汉的政治军事中枢。虽然原建筑已不存,但这一区域见证了武汉作为战时首都的重要历史。",
+                architecture: {
+                    style: "原建筑已不存",
+                    year: "1938年临时设立",
+                    builder: "国民政府"
+                },
+                openTime: "遗址区域",
+                ticket: "免费",
+                images: ["https://images.unsplash.com/photo-1464226184884-fa280b87c399?w=800"],
+                comments: []
+            },
+            {
+                id: 18,
+                name: "武汉大学抗战旧址",
+                address: "武汉大学校内(珞珈山)",
+                lat: 30.5356,
+                lng: 114.3623,
+                description: "武汉大学内保存多处抗战时期重要旧址。半山庐(珞珈山16号)是蒋介石的旧居,1938年他曾在此居住办公。十八栋(珞珈山一区27号)是周恩来故居,周恩来1938年在武汉期间曾在此居住。这些建筑见证了国共两党在武汉时期的历史,也体现了武大在抗战时期的特殊地位。武大早期建筑群为中西合璧风格,是中国近代大学建筑的杰作。",
+                architecture: {
+                    style: "中西合璧式大学建筑",
+                    year: "1930年代",
+                    builder: "武汉大学"
+                },
+                openTime: "校园开放时间内可参观",
+                ticket: "免费",
+                images: ["https://images.unsplash.com/photo-1562774053-701939374585?w=800"],
+                comments: [
+                    {
+                        author: "武大校友",
+                        date: "2024-01-28",
+                        rating: 5,
+                        text: "母校的历史建筑承载着厚重的历史。春天樱花季来参观最美,但也要记住这些建筑背后的故事。"
+                    }
+                ]
+            },
+            {
+                id: 19,
+                name: "中山舰博物馆",
+                address: "江夏区金口街特1号",
+                lat: 30.3234,
+                lng: 114.2789,
+                description: "中山舰原名永丰舰,1912年建成,1925年为纪念孙中山先生改名中山舰。1938年10月24日,中山舰在武汉保卫战中与日军激战,遭日机轰炸沉没于长江金口水域,舰长萨师俊及25名官兵壮烈牺牲。1997年中山舰被整体打捞,2011年建成博物馆。舰体保存较好,博物馆完整展示了中山舰的历史和打捞修复过程,是重要的爱国主义教育基地。",
+                architecture: {
+                    style: "现代博物馆建筑",
+                    year: "2011年(博物馆),中山舰1912年建造",
+                    builder: "日本三菱造船厂建造舰船"
+                },
+                openTime: "09:00-17:00(周一闭馆)",
+                ticket: "免费(需预约)",
+                images: ["https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800"],
+                comments: [
+                    {
+                        author: "军事迷",
+                        date: "2024-02-08",
+                        rating: 5,
+                        text: "震撼!能近距离观看中山舰实体,了解那段悲壮的历史。博物馆设计也很用心,值得专程前往。"
+                    }
+                ]
+            },
+            {
+                id: 20,
+                name: "姚家山新四军第五师旧址",
+                address: "黄陂区蔡店街道姚家山村",
+                lat: 30.8923,
+                lng: 114.3456,
+                description: "1941-1945年,新四军第五师司令部设在姚家山,李先念任师长兼政委。第五师在这里领导创建了鄂豫边区抗日根据地,开展敌后游击战争,牵制了大量日伪军。姚家山村民全力支援新四军,300余人参军,被誉为'抗日第一村'。旧址保存了司令部、医院、兵工厂等多处遗迹,现为红色旅游景区,展示了军民团结抗战的光辉历史。",
+                architecture: {
+                    style: "传统民居建筑(作为军事机关)",
+                    year: "清代民居,1941年起作为司令部",
+                    builder: "当地村民"
+                },
+                openTime: "08:00-17:00",
+                ticket: "免费",
+                images: ["https://images.unsplash.com/photo-1609137144813-7d9921338f24?w=800"],
+                comments: [
+                    {
+                        author: "红色旅游者",
+                        date: "2024-01-30",
+                        rating: 5,
+                        text: "非常值得去的红色教育基地!村子保存完好,能感受到当年军民鱼水情。山路较远,建议自驾。"
+                    }
+                ]
+            },
+            {
+                id: 21,
+                name: "侏儒山战役博物馆",
+                address: "蔡甸区儒山街傅家山",
+                lat: 30.4812,
+                lng: 113.9234,
+                description: "1940年2月,新四军第五师挺进侏儒山地区,与日伪军激战,首次重创日军。1941年12月至1942年2月,爆发第二次侏儒山战役,新四军成功打破日军的封锁和'扫荡',巩固了抗日根据地。侏儒山战役是新四军第五师的重要战役,显示了人民军队的战斗力。博物馆详细展示了两次战役的过程和意义,并陈列了大量文物和史料。",
+                architecture: {
+                    style: "现代纪念馆建筑",
+                    year: "21世纪初建成",
+                    builder: "蔡甸区政府"
+                },
+                openTime: "09:00-17:00(周一闭馆)",
+                ticket: "免费",
+                images: ["https://images.unsplash.com/photo-1586339277861-b0b8c885a422?w=800"],
+                comments: []
+            },
+            {
+                id: 22,
+                name: "第六战区受降堂",
+                address: "汉口中山公园内",
+                lat: 30.5845,
+                lng: 114.2645,
+                description: "1945年9月18日,中国第六战区在此接受日军投降,这是抗战胜利的重要历史时刻。第六战区司令长官孙蔚如上将主持受降仪式,日军第六方面军司令官冈部直三郎大将代表侵华日军签署投降书。受降堂原为中山公园内的建筑,现已重修,成为纪念抗战胜利的重要场所,每年都会举行纪念活动。",
+                architecture: {
+                    style: "传统中式建筑",
+                    year: "原建筑1920年代,后重建",
+                    builder: "中山公园管理处"
+                },
+                openTime: "06:00-22:00(中山公园开放时间)",
+                ticket: "公园免费,纪念堂免费",
+                images: ["https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=800"],
+                comments: [
+                    {
+                        author: "历史见证者",
+                        date: "2024-02-03",
+                        rating: 5,
+                        text: "每次来都心潮澎湃,这里见证了中华民族抗战的最后胜利。建议每年9月18日来参加纪念活动。"
+                    }
+                ]
+            },
+            {
+                id: 23,
+                name: "汉口英雄路",
+                address: "日租界军官宿舍旧址旁",
+                lat: 30.5885,
+                lng: 114.2905,
+                description: "抗战胜利后,武汉市政府将原日租界内的多条街道以抗日烈士姓名命名,包括郝梦龄路、刘家麒路、陈怀民路、张自忠路等。郝梦龄、刘家麒在忻口战役中壮烈殉国,陈怀民是空军英雄,张自忠将军在襄阳战役中殉国。这些路名永久纪念了为国捐躯的抗日英烈,体现了武汉人民对英雄的崇敬和对历史的铭记。",
+                architecture: {
+                    style: "街道(历史文化景观)",
+                    year: "1945年后改名",
+                    builder: "武汉市政府"
+                },
+                openTime: "全天开放",
+                ticket: "免费",
+                images: ["https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=800"],
+                comments: []
+            },
+            {
+                id: 24,
+                name: "蛇山烈士祠",
+                address: "武珞路47号首义公园内",
+                lat: 30.5423,
+                lng: 114.2967,
+                description: "位于首义公园(原武昌蛇山)内,为纪念辛亥革命和抗日战争烈士而建。祠内供奉着在武汉地区牺牲的革命烈士和抗日烈士牌位。蛇山是辛亥革命首义的重要地点,也是抗战时期的重要阵地。烈士祠庄严肃穆,是重要的爱国主义教育基地,每年清明节和重要纪念日都有各界人士前来祭奠。",
+                architecture: {
+                    style: "传统中式纪念建筑",
+                    year: "20世纪中期建成",
+                    builder: "武汉市政府"
+                },
+                openTime: "08:00-18:00",
+                ticket: "免费",
+                images: ["https://images.unsplash.com/photo-1548013146-72479768bada?w=800"],
+                comments: [
+                    {
+                        author: "学生",
+                        date: "2024-02-12",
+                        rating: 5,
+                        text: "学校组织来这里祭奠烈士,感受很深。这些英雄为国家独立和民族解放献出生命,我们要铭记历史。"
+                    }
+                ]
+            }
+        ];
+
+        // Initialize map
+        let map;
+        let markers = [];
+        let routeLayer;
+        
+        function initMap() {
+            // Center on Wuhan
+            map = L.map('map').setView([30.5928, 114.3055], 12);
+            
+            // Use CartoDB Dark Matter tiles for better aesthetics
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+                maxZoom: 19
+            }).addTo(map);
+            
+            // Add markers
+            locations.forEach((location, index) => {
+                const marker = L.marker([location.lat, location.lng], {
+                    icon: L.divIcon({
+                        className: 'custom-marker',
+                        html: `<div style="background: #c41e3a; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 3px solid #d4af37; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">${location.id}</div>`,
+                        iconSize: [32, 32]
+                    })
+                }).addTo(map);
+                
+                marker.bindPopup(`
+                    <div class="popup-title">${location.name}</div>
+                    <div class="popup-address">${location.address}</div>
+                    <button class="popup-btn" onclick="showLocationDetail(${location.id})">查看详情</button>
+                `);
+                
+                markers.push(marker);
+            });
+            
+            // Render location list
+            renderLocationList();
+        }
+        
+        function renderLocationList() {
+            const listContainer = document.getElementById('locationList');
+            listContainer.innerHTML = locations.map(loc => `
+                <div class="location-item" onclick="showLocationDetail(${loc.id})">
+                    <div class="location-number">${loc.id}</div>
+                    <div>
+                        <div class="location-name">${loc.name}</div>
+                        <div class="location-address">${loc.address}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function showLocationDetail(id) {
+            const location = locations.find(loc => loc.id === id);
+            if (!location) return;
+            
+            document.getElementById('modalTitle').textContent = location.name;
+            document.getElementById('modalAddress').innerHTML = `📍 ${location.address}`;
+            
+            const modalBody = document.getElementById('modalBody');
+            modalBody.innerHTML = `
+                <div class="section">
+                    <div class="section-title">历史背景</div>
+                    <div class="section-content">${location.description}</div>
+                </div>
+                
+                ${location.architecture ? `
+                <div class="section">
+                    <div class="section-title">建筑信息</div>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">建筑风格</div>
+                            <div class="info-value">${location.architecture.style}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">建筑年代</div>
+                            <div class="info-value">${location.architecture.year}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">设计/承建</div>
+                            <div class="info-value">${location.architecture.builder}</div>
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
+                
+                <div class="section">
+                    <div class="section-title">参观信息</div>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">开放时间</div>
+                            <div class="info-value">${location.openTime}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">门票信息</div>
+                            <div class="info-value">${location.ticket}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <div class="section-title">游客评价</div>
+                    <div id="commentsSection">
+                        ${location.comments && location.comments.length > 0 ? 
+                            location.comments.map(comment => `
+                                <div class="comment">
+                                    <div class="comment-header">
+                                        <span class="comment-author">${comment.author}</span>
+                                        <span class="comment-date">${comment.date}</span>
+                                    </div>
+                                    <div class="comment-text">${comment.text}</div>
+                                    <div class="comment-rating">${'★'.repeat(comment.rating)}${'☆'.repeat(5-comment.rating)}</div>
+                                </div>
+                            `).join('') : 
+                            '<p style="color: var(--text-gray);">暂无评价，欢迎您成为第一位评价者</p>'
+                        }
+                    </div>
+                    
+                    <div class="add-comment">
+                        <textarea placeholder="分享您的参观感受..." id="newComment"></textarea>
+                        <button onclick="addComment(${id})">提交评价</button>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('detailModal').style.display = 'block';
+            // 从数据库加载评论
+            loadCommentsFromDB(id);
+
+            
+            // Zoom to marker
+            map.setView([location.lat, location.lng], 15);
+        }
+        
+        async function addComment(locationId) {
+            const commentText = document.getElementById('newComment').value.trim();
+            if (!commentText) {
+                alert('请输入评价内容');
+                return;
+            }
+            
+            // 使用 Supabase 保存评论
+            const result = await CommentSystem.addComment(locationId, commentText, 5);
+            
+            if (result.success) {
+                alert('评价已提交！');
+                // 重新加载评论
+                loadCommentsFromDB(locationId);
+                document.getElementById('newComment').value = '';
+            } else {
+                alert('提交失败：' + result.error);
+            }
+        }
+
+        // 从数据库加载评论
+        async function loadCommentsFromDB(locationId) {
+            const result = await CommentSystem.loadComments(locationId);
+            
+            if (result.success) {
+                const commentsSection = document.getElementById('commentsSection');
+                
+                if (result.comments.length === 0) {
+                    commentsSection.innerHTML = '<p style="color: var(--text-gray);">暂无评价，欢迎您成为第一位评价者</p>';
+                } else {
+                    commentsSection.innerHTML = result.comments.map(comment => `
+                        <div class="comment">
+                            <div class="comment-header">
+                                <span class="comment-author">${comment.author_name}</span>
+                                <span class="comment-date">${new Date(comment.created_at).toLocaleDateString('zh-CN')}</span>
+                            </div>
+                            <div class="comment-text">${comment.text}</div>
+                            <div class="comment-rating">${'★'.repeat(comment.rating)}${'☆'.repeat(5-comment.rating)}</div>
+                        </div>
+                    `).join('');
+                }
+            }
+        }
+
+        
+        function showRouteModal() {
+            const checkboxContainer = document.getElementById('routeCheckboxes');
+            checkboxContainer.innerHTML = locations.map(loc => `
+                <label>
+                    <input type="checkbox" value="${loc.id}" class="route-checkbox">
+                    <span>${loc.id}. ${loc.name}</span>
+                </label>
+            `).join('');
+            
+            // Populate start/end point selects
+            const startSelect = document.getElementById('startPoint');
+            const endSelect = document.getElementById('endPoint');
+            const options = locations.map(loc => 
+                `<option value="${loc.id}">${loc.name}</option>`
+            ).join('');
+            startSelect.innerHTML = '<option value="">请选择起点</option>' + options;
+            endSelect.innerHTML = '<option value="">请选择终点</option>' + options;
+            
+            document.getElementById('routeModal').style.display = 'block';
+        }
+        
+        function showCreateMapModal() {
+            alert('创建地图功能开发中，敬请期待！\n\n您可以通过此功能创建自己的历史文化路线地图，添加相关地点和介绍，与其他用户分享。');
+        }
+        
+        function toggleStartInput() {
+            const startType = document.querySelector('input[name="startType"]:checked').value;
+            const selectElement = document.getElementById('startPoint');
+            const inputElement = document.getElementById('customStartAddress');
+            
+            if (startType === 'preset') {
+                selectElement.style.display = 'block';
+                inputElement.style.display = 'none';
+            } else {
+                selectElement.style.display = 'none';
+                inputElement.style.display = 'block';
+            }
+        }
+        
+        function toggleEndInput() {
+            const endType = document.querySelector('input[name="endType"]:checked').value;
+            const selectElement = document.getElementById('endPoint');
+            const inputElement = document.getElementById('customEndAddress');
+            
+            if (endType === 'preset') {
+                selectElement.style.display = 'block';
+                inputElement.style.display = 'none';
+            } else {
+                selectElement.style.display = 'none';
+                inputElement.style.display = 'block';
+            }
+        }
+        
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+        
+        async function generateRoute() {
+            const selectedCheckboxes = document.querySelectorAll('.route-checkbox:checked');
+            const selectedIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.value));
+            
+            if (selectedIds.length < 1) {
+                alert('请至少选择1个地点');
+                return;
+            }
+            
+            // Get start and end points
+            const startType = document.querySelector('input[name="startType"]:checked').value;
+            const endType = document.querySelector('input[name="endType"]:checked').value;
+            
+            let startLoc, endLoc;
+            
+            // Handle start point
+            if (startType === 'preset') {
+                const startId = parseInt(document.getElementById('startPoint').value);
+                if (!startId) {
+                    alert('请选择起点或输入自定义地址');
+                    return;
+                }
+                startLoc = locations.find(loc => loc.id === startId);
+            } else {
+                const customAddress = document.getElementById('customStartAddress').value.trim();
+                if (!customAddress) {
+                    alert('请输入起点地址');
+                    return;
+                }
+                
+                // 使用高德地图地理编码
+                const geoResult = await GeocodingSystem.geocode(customAddress);
+                if (geoResult.success) {
+                    startLoc = {
+                        id: 'custom-start',
+                        name: customAddress,
+                        address: geoResult.formattedAddress,
+                        lat: geoResult.lat,
+                        lng: geoResult.lng,
+                        isCustom: true
+                    };
+                } else {
+                    alert('起点地址解析失败，请检查地址是否正确');
+                    return;
+                }
+            }
+
+            // Handle end point
+            if (endType === 'preset') {
+                const endId = parseInt(document.getElementById('endPoint').value);
+                if (!endId) {
+                    alert('请选择终点或输入自定义地址');
+                    return;
+                }
+                endLoc = locations.find(loc => loc.id === endId);
+            } else {
+                const customAddress = document.getElementById('customEndAddress').value.trim();
+                if (!customAddress) {
+                    alert('请输入终点地址');
+                    return;
+                }
+                
+                // 使用高德地图地理编码
+                const geoResult = await GeocodingSystem.geocode(customAddress);
+                if (geoResult.success) {
+                    endLoc = {
+                        id: 'custom-end',
+                        name: customAddress,
+                        address: geoResult.formattedAddress,
+                        lat: geoResult.lat,
+                        lng: geoResult.lng,
+                        isCustom: true
+                    };
+                } else {
+                    alert('终点地址解析失败，请检查地址是否正确');
+                    return;
+                }
+            }
+            
+            const order = document.querySelector('input[name="routeOrder"]:checked').value;
+            
+            // Get selected locations
+            const selectedLocations = locations.filter(loc => selectedIds.includes(loc.id));
+            
+            // Calculate distances from start point
+            selectedLocations.forEach(loc => {
+                loc.distanceFromStart = calculateDistance(startLoc.lat, startLoc.lng, loc.lat, loc.lng);
+            });
+            
+            // Sort by distance
+            if (order === 'nearest') {
+                selectedLocations.sort((a, b) => a.distanceFromStart - b.distanceFromStart);
+            } else {
+                selectedLocations.sort((a, b) => b.distanceFromStart - a.distanceFromStart);
+            }
+            
+            // Build route: start -> locations -> end
+            // Filter out start and end if they're in the selected locations
+            const filteredLocations = selectedLocations.filter(loc => 
+                (!startLoc.isCustom && loc.id !== startLoc.id) && 
+                (!endLoc.isCustom && loc.id !== endLoc.id)
+            );
+            
+            const route = [startLoc, ...filteredLocations, endLoc];
+            
+            // Display route
+            displayRoute(route);
+            
+            // Draw route on map
+            drawRouteOnMap(route);
+        }
+        
+        function calculateDistance(lat1, lng1, lat2, lng2) {
+            const R = 6371; // Earth radius in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLng/2) * Math.sin(dLng/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+        
+        function displayRoute(route) {
+            const resultContainer = document.getElementById('routeResult');
+            
+            let html = '<div class="route-result">';
+            html += '<div class="section-title">推荐游览路线</div>';
+            
+            // Show note if custom locations are used
+            const hasCustom = route.some(loc => loc.isCustom);
+            if (hasCustom) {
+                html += `
+                    <div style="background: rgba(212, 175, 55, 0.1); border-left: 3px solid var(--accent-gold); padding: 1rem; margin-bottom: 1rem; color: var(--text-gray);">
+                        <strong style="color: var(--accent-gold);">提示：</strong>自定义地址的坐标为估算值。实际导航时，请使用专业地图应用输入完整地址以获取精确路线。
+                    </div>
+                `;
+            }
+            
+            for (let i = 0; i < route.length - 1; i++) {
+                const from = route[i];
+                const to = route[i + 1];
+                const distance = calculateDistance(from.lat, from.lng, to.lat, to.lng).toFixed(2);
+                
+                const fromLabel = from.isCustom ? `自定义起点: ${from.name}` : 
+                                 (i === 0 ? `起点: ${from.name}` : `第${i}站: ${from.name}`);
+                const toLabel = to.isCustom ? `自定义终点: ${to.name}` : 
+                               (i === route.length - 2 ? `终点: ${to.name}` : `第${i+1}站: ${to.name}`);
+                
+                html += `
+                    <div class="route-segment">
+                        <div class="route-segment-header">
+                            ${fromLabel} → ${toLabel}
+                        </div>
+                        <div style="color: var(--text-gray); margin-bottom: 0.5rem;">
+                            ${from.isCustom || to.isCustom ? '预估' : ''}距离约: ${distance} 公里
+                        </div>
+                        <div class="transport-options">
+                            <button class="transport-btn" onclick="showTransportInfo('${from.name}', '${to.name}', 'driving')">🚗 驾车</button>
+                            <button class="transport-btn" onclick="showTransportInfo('${from.name}', '${to.name}', 'transit')">🚌 公交</button>
+                            <button class="transport-btn" onclick="showTransportInfo('${from.name}', '${to.name}', 'walking')">🚶 步行</button>
+                            <button class="transport-btn" onclick="showTransportInfo('${from.name}', '${to.name}', 'bicycling')">🚴 骑行</button>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            html += '</div>';
+            resultContainer.innerHTML = html;
+        }
+        
+        function drawRouteOnMap(route) {
+            // Remove existing route layer
+            if (routeLayer) {
+                map.removeLayer(routeLayer);
+            }
+            
+            // Remove any existing custom markers
+            map.eachLayer(layer => {
+                if (layer.options && layer.options.isCustomMarker) {
+                    map.removeLayer(layer);
+                }
+            });
+            
+            // Add custom markers for start/end if they're custom locations
+            route.forEach((loc, index) => {
+                if (loc.isCustom) {
+                    const isStart = index === 0;
+                    const isEnd = index === route.length - 1;
+                    const label = isStart ? '起' : (isEnd ? '终' : '');
+                    const color = isStart ? '#4CAF50' : (isEnd ? '#FF5722' : '#FFC107');
+                    
+                    L.marker([loc.lat, loc.lng], {
+                        icon: L.divIcon({
+                            className: 'custom-marker',
+                            html: `<div style="background: ${color}; color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.5); font-size: 1.1rem;">${label}</div>`,
+                            iconSize: [36, 36]
+                        }),
+                        isCustomMarker: true
+                    }).addTo(map).bindPopup(`
+                        <div class="popup-title">${loc.name}</div>
+                        <div class="popup-address">${isStart ? '自定义起点' : (isEnd ? '自定义终点' : '自定义地点')}</div>
+                        <div style="color: var(--text-gray); font-size: 0.85rem; margin-top: 0.5rem;">注意：坐标为估算值</div>
+                    `);
+                }
+            });
+            
+            // Create polyline
+            const latLngs = route.map(loc => [loc.lat, loc.lng]);
+            routeLayer = L.polyline(latLngs, {
+                color: '#c41e3a',
+                weight: 4,
+                opacity: 0.8,
+                dashArray: '10, 5'
+            }).addTo(map);
+            
+            // Fit map to route
+            map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
+        }
+        
+        async function showTransportInfo(from, to, mode) {
+            // 显示加载中
+            alert('正在规划路线...');
+            
+            // 获取起点和终点的坐标
+            const fromLoc = locations.find(loc => loc.name === from) || 
+                            { lat: 30.5928, lng: 114.3055 }; // 默认武汉中心
+            const toLoc = locations.find(loc => loc.name === to) || 
+                        { lat: 30.5928, lng: 114.3055 };
+            
+            const origin = [fromLoc.lng, fromLoc.lat];
+            const destination = [toLoc.lng, toLoc.lat];
+            
+            let result;
+            const modeNames = {
+                'driving': '驾车',
+                'transit': '公交',
+                'walking': '步行',
+                'bicycling': '骑行'
+            };
+            
+            try {
+                switch(mode) {
+                    case 'driving':
+                        result = await RoutePlanningSystem.drivingRoute(origin, destination);
+                        break;
+                    case 'transit':
+                        result = await RoutePlanningSystem.transitRoute(origin, destination);
+                        break;
+                    case 'walking':
+                        result = await RoutePlanningSystem.walkingRoute(origin, destination);
+                        break;
+                    case 'bicycling':
+                        result = await RoutePlanningSystem.ridingRoute(origin, destination);
+                        break;
+                }
+                
+                if (result.success) {
+                    const distance = (result.distance / 1000).toFixed(2);
+                    const duration = Math.round(result.duration / 60);
+                    const cost = result.cost || result.tolls || 0;
+                    
+                    let message = `${modeNames[mode]}路线规划\n\n`;
+                    message += `从: ${from}\n`;
+                    message += `到: ${to}\n\n`;
+                    message += `距离: ${distance} 公里\n`;
+                    message += `预计时间: ${duration} 分钟\n`;
+                    if (cost > 0) {
+                        message += `费用: ¥${cost}\n`;
+                    }
+                    
+                    alert(message);
+                } else {
+                    alert('路线规划失败：' + result.error);
+                }
+            } catch (error) {
+                alert('路线规划出错：' + error.message);
+            }
+        }
+
+        
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.style.display = 'none';
+            }
+        }
+        
+        // Initialize on load
+        window.onload = initMap;
+    </script>
+    <!-- 引入配置文件 -->
+    <script src="supabase-config.js"></script>
+    <script src="amap-integration.js"></script>
+
+    <!-- 初始化认证状态 -->
+    <script>
+    // 监听用户登录状态
+    AuthSystem.onAuthStateChange((user) => {
+        if (user) {
+            console.log('用户已登录:', user.email);
+            updateUIForLoggedInUser(user);
+        } else {
+            console.log('用户未登录');
+            updateUIForLoggedOutUser();
+        }
+    });
+  
+    // 更新登录用户的 UI
+    function updateUIForLoggedInUser(user) {
+        const userMenuHTML = `
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <span style="color: var(--accent-gold);">${user.email}</span>
+            <button onclick="handleSignOut()" style="background: transparent; border: 1px solid var(--border-color); color: var(--text-light); padding: 0.6rem 1.2rem; cursor: pointer;">登出</button>
+        </div>
+        `;
+    
+        const navElement = document.querySelector('nav');
+        if (navElement) {
+        navElement.innerHTML = userMenuHTML + navElement.innerHTML;
+        }
+    }
+  
+    // 更新未登录用户的 UI
+    function updateUIForLoggedOutUser() {
+        const loginButtonHTML = `
+        <button onclick="showLoginModal()" style="background: var(--accent-gold); color: var(--primary-dark); border: none; padding: 0.8rem 1.8rem; cursor: pointer; font-weight: 600;">登录 / 注册</button>
+     `;
+    
+        const navElement = document.querySelector('nav');
+        if (navElement && !navElement.innerHTML.includes('登出')) {
+        navElement.insertAdjacentHTML('afterbegin', loginButtonHTML);
+        }
+    }
+  
+    // 登出处理
+    async function handleSignOut() {
+        const result = await AuthSystem.signOut();
+     if (result.success) {
+        alert('已登出');
+        location.reload();
+        }
+     }
+</script>
+
+</body>
+</html>
