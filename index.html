@@ -1663,20 +1663,21 @@
         }
         
         async function generateRoute() {
+            try {
             const selectedCheckboxes = document.querySelectorAll('.route-checkbox:checked');
             const selectedIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.value));
-            
+
             if (selectedIds.length < 1) {
                 alert('请至少选择1个地点');
                 return;
             }
-            
+
             // Get start and end points
             const startType = document.querySelector('input[name="startType"]:checked').value;
             const endType = document.querySelector('input[name="endType"]:checked').value;
-            
+
             let startLoc, endLoc;
-            
+
             // Handle start point
             if (startType === 'preset') {
                 const startId = parseInt(document.getElementById('startPoint').value);
@@ -1691,7 +1692,11 @@
                     alert('请输入起点地址');
                     return;
                 }
-                
+
+                if (!window.GeocodingSystem) {
+                    alert('地图服务尚未加载，请稍后再试');
+                    return;
+                }
                 // 使用高德地图地理编码
                 const geoResult = await GeocodingSystem.geocode(customAddress);
                 if (geoResult.success) {
@@ -1704,7 +1709,7 @@
                         isCustom: true
                     };
                 } else {
-                    alert('起点地址解析失败，请检查地址是否正确');
+                    alert('起点地址解析失败：' + geoResult.error + '\n\n请检查地址是否正确，或尝试更详细的地址描述');
                     return;
                 }
             }
@@ -1723,7 +1728,11 @@
                     alert('请输入终点地址');
                     return;
                 }
-                
+
+                if (!window.GeocodingSystem) {
+                    alert('地图服务尚未加载，请稍后再试');
+                    return;
+                }
                 // 使用高德地图地理编码
                 const geoResult = await GeocodingSystem.geocode(customAddress);
                 if (geoResult.success) {
@@ -1736,42 +1745,50 @@
                         isCustom: true
                     };
                 } else {
-                    alert('终点地址解析失败，请检查地址是否正确');
+                    alert('终点地址解析失败：' + geoResult.error + '\n\n请检查地址是否正确，或尝试更详细的地址描述');
                     return;
                 }
             }
-            
+
             const order = document.querySelector('input[name="routeOrder"]:checked').value;
-            
+
             // Get selected locations
             const selectedLocations = locations.filter(loc => selectedIds.includes(loc.id));
-            
+
             // Calculate distances from start point
             selectedLocations.forEach(loc => {
                 loc.distanceFromStart = calculateDistance(startLoc.lat, startLoc.lng, loc.lat, loc.lng);
             });
-            
+
             // Sort by distance
             if (order === 'nearest') {
                 selectedLocations.sort((a, b) => a.distanceFromStart - b.distanceFromStart);
             } else {
                 selectedLocations.sort((a, b) => b.distanceFromStart - a.distanceFromStart);
             }
-            
+
             // Build route: start -> locations -> end
-            // Filter out start and end if they're in the selected locations
-            const filteredLocations = selectedLocations.filter(loc => 
-                (!startLoc.isCustom && loc.id !== startLoc.id) && 
-                (!endLoc.isCustom && loc.id !== endLoc.id)
+            // Filter out start and end if they're preset locations already selected as waypoints
+            const filteredLocations = selectedLocations.filter(loc =>
+                (startLoc.isCustom || loc.id !== startLoc.id) &&
+                (endLoc.isCustom || loc.id !== endLoc.id)
             );
-            
+
             const route = [startLoc, ...filteredLocations, endLoc];
-            
+
             // Display route
             displayRoute(route);
-            
+
             // Draw route on map
             drawRouteOnMap(route);
+
+                // ✅ 新增：保存路线到全局变量，供 showTransportInfo 使用
+            window.currentRoute = route;
+            console.log('路线已保存到全局变量:', window.currentRoute);
+            } catch (err) {
+                console.error('生成路线出错:', err);
+                alert('生成路线出错：' + err.message + '\n\n请打开浏览器控制台(F12)查看详细信息');
+            }
         }
         
         function calculateDistance(lat1, lng1, lat2, lng2) {
@@ -1882,28 +1899,54 @@
             map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
         }
         
-        async function showTransportInfo(from, to, mode) {
-            // 显示加载中
-            alert('正在规划路线...');
+        async function showTransportInfo(fromName, toName, mode) {
+            console.log('showTransportInfo 调用:', fromName, toName, mode);
             
-            // 获取起点和终点的坐标
-            const fromLoc = locations.find(loc => loc.name === from) || 
-                            { lat: 30.5928, lng: 114.3055 }; // 默认武汉中心
-            const toLoc = locations.find(loc => loc.name === to) || 
-                        { lat: 30.5928, lng: 114.3055 };
-            
-            const origin = [fromLoc.lng, fromLoc.lat];
-            const destination = [toLoc.lng, toLoc.lat];
-            
-            let result;
-            const modeNames = {
-                'driving': '驾车',
-                'transit': '公交',
-                'walking': '步行',
-                'bicycling': '骑行'
-            };
+            // 显示加载提示
+            const loadingMsg = alert('正在规划路线，请稍候...');
             
             try {
+                // 从 route 数组中查找起点和终点的完整信息
+                // route 数组应该在 generateRoute 中被保存为全局变量
+                let fromLoc, toLoc;
+                
+                // 尝试从全局 currentRoute 中查找
+                if (window.currentRoute) {
+                    fromLoc = window.currentRoute.find(loc => loc.name === fromName);
+                    toLoc = window.currentRoute.find(loc => loc.name === toName);
+                }
+                
+                // 如果找不到，尝试从 locations 数组查找
+                if (!fromLoc) {
+                    fromLoc = locations.find(loc => loc.name === fromName);
+                }
+                if (!toLoc) {
+                    toLoc = locations.find(loc => loc.name === toName);
+                }
+                
+                // 如果还是找不到，使用武汉市中心作为默认坐标
+                if (!fromLoc || !toLoc) {
+                    console.warn('无法找到地点坐标，使用默认值');
+                    fromLoc = fromLoc || { lat: 30.5928, lng: 114.3055, name: fromName };
+                    toLoc = toLoc || { lat: 30.5928, lng: 114.3055, name: toName };
+                }
+                
+                console.log('起点坐标:', fromLoc);
+                console.log('终点坐标:', toLoc);
+                
+                // 构建坐标数组 [lng, lat]
+                const origin = [fromLoc.lng, fromLoc.lat];
+                const destination = [toLoc.lng, toLoc.lat];
+                
+                let result;
+                const modeNames = {
+                    'driving': '驾车',
+                    'transit': '公交',
+                    'walking': '步行',
+                    'bicycling': '骑行'
+                };
+                
+                // 根据交通方式调用相应的路线规划
                 switch(mode) {
                     case 'driving':
                         result = await RoutePlanningSystem.drivingRoute(origin, destination);
@@ -1917,7 +1960,11 @@
                     case 'bicycling':
                         result = await RoutePlanningSystem.ridingRoute(origin, destination);
                         break;
+                    default:
+                        result = { success: false, error: '未知的交通方式' };
                 }
+                
+                console.log('路线规划结果:', result);
                 
                 if (result.success) {
                     const distance = (result.distance / 1000).toFixed(2);
@@ -1925,8 +1972,8 @@
                     const cost = result.cost || result.tolls || 0;
                     
                     let message = `${modeNames[mode]}路线规划\n\n`;
-                    message += `从: ${from}\n`;
-                    message += `到: ${to}\n\n`;
+                    message += `从: ${fromName}\n`;
+                    message += `到: ${toName}\n\n`;
                     message += `距离: ${distance} 公里\n`;
                     message += `预计时间: ${duration} 分钟\n`;
                     if (cost > 0) {
@@ -1935,13 +1982,13 @@
                     
                     alert(message);
                 } else {
-                    alert('路线规划失败：' + result.error);
+                    alert('路线规划失败：' + result.error + '\n\n请检查：\n1. 高德地图API是否正确配置\n2. 起点和终点是否在武汉市内\n3. 浏览器控制台是否有错误信息');
                 }
             } catch (error) {
-                alert('路线规划出错：' + error.message);
+                console.error('路线规划出错:', error);
+                alert('路线规划出错：' + error.message + '\n\n请打开浏览器控制台(F12)查看详细错误信息');
             }
         }
-
         
         // Close modal when clicking outside
         window.onclick = function(event) {
@@ -1955,7 +2002,7 @@
     </script>
     <!-- 引入配置文件 -->
     <script src="supabase-config.js"></script>
-    <script src="amap-integration.js"></script>
+    <script src="amap-config.js"></script>
 
     <!-- 初始化认证状态 -->
     <script>
