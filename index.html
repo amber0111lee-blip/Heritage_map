@@ -803,7 +803,7 @@
                         </label>
                     </div>
                     
-                    <button class="route-button" onclick="generateRoute()" style="margin-top: 2rem;">生成路线</button>
+                    <button id="generateRouteBtn" class="route-button" onclick="generateRoute()" style="margin-top: 2rem;">生成路线</button>
                 </div>
                 
                 <div id="routeResult"></div>
@@ -1663,6 +1663,10 @@
         }
         
         async function generateRoute() {
+            const btn = document.getElementById('generateRouteBtn');
+            btn.textContent = '正在生成...';
+            btn.disabled = true;
+            console.log('generateRoute 开始执行');
             try {
             const selectedCheckboxes = document.querySelectorAll('.route-checkbox:checked');
             const selectedIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.value));
@@ -1690,15 +1694,22 @@
                 const customAddress = document.getElementById('customStartAddress').value.trim();
                 if (!customAddress) {
                     alert('请输入起点地址');
+                    btn.textContent = '生成路线';
+                    btn.disabled = false;
                     return;
                 }
 
                 if (!window.GeocodingSystem) {
                     alert('地图服务尚未加载，请稍后再试');
+                    btn.textContent = '生成路线';
+                    btn.disabled = false;
                     return;
                 }
+                btn.textContent = '正在解析起点地址...';
+                console.log('开始解析起点地址:', customAddress);
                 // 使用高德地图地理编码
                 const geoResult = await GeocodingSystem.geocode(customAddress);
+                console.log('起点地址解析结果:', geoResult);
                 if (geoResult.success) {
                     startLoc = {
                         id: 'custom-start',
@@ -1731,10 +1742,15 @@
 
                 if (!window.GeocodingSystem) {
                     alert('地图服务尚未加载，请稍后再试');
+                    btn.textContent = '生成路线';
+                    btn.disabled = false;
                     return;
                 }
+                btn.textContent = '正在解析终点地址...';
+                console.log('开始解析终点地址:', customAddress);
                 // 使用高德地图地理编码
                 const geoResult = await GeocodingSystem.geocode(customAddress);
+                console.log('终点地址解析结果:', geoResult);
                 if (geoResult.success) {
                     endLoc = {
                         id: 'custom-end',
@@ -1785,9 +1801,13 @@
                 // ✅ 新增：保存路线到全局变量，供 showTransportInfo 使用
             window.currentRoute = route;
             console.log('路线已保存到全局变量:', window.currentRoute);
+            btn.textContent = '生成路线';
+            btn.disabled = false;
             } catch (err) {
                 console.error('生成路线出错:', err);
                 alert('生成路线出错：' + err.message + '\n\n请打开浏览器控制台(F12)查看详细信息');
+                btn.textContent = '生成路线';
+                btn.disabled = false;
             }
         }
         
