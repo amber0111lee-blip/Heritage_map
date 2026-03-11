@@ -7,6 +7,12 @@
     <!-- Supabase 客户端库 -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
+    <!-- 高德地图安全密钥配置（必须在 AMap 脚本之前） -->
+    <script>
+        window._AMapSecurityConfig = {
+            securityJsCode: '你的安全密钥'  // 替换为高德控制台中的安全密钥
+        };
+    </script>
     <!-- 高德地图 API -->
     <script src="https://webapi.amap.com/maps?v=2.0&key=e4f9114d0564a5cbb8854bdde336a3b1&plugin=AMap.Geocoder,AMap.Driving,AMap.Walking,AMap.Transfer,AMap.Riding"></script>
 
@@ -2022,7 +2028,7 @@
     </script>
     <!-- 引入配置文件 -->
     <script src="supabase-config.js"></script>
-    <script src="amap-config.js"></script>
+    <script src="amap-config.js?v=3"></script>
 
     <!-- 初始化认证状态 -->
     <script>
