@@ -595,7 +595,154 @@
             background: var(--accent-gold);
             color: var(--primary-dark);
         }
-        
+
+        .transport-btn.active {
+            background: var(--accent-gold);
+            color: var(--primary-dark);
+            font-weight: 600;
+        }
+
+        /* ===== 交通详情面板 v2 ===== */
+        .transport-detail {
+            margin-top: 0.8rem;
+            display: none;
+        }
+        .transport-detail.visible { display: block; }
+
+        /* 单个方案卡片 */
+        .route-plan {
+            background: rgba(20, 20, 20, 0.7);
+            border: 1px solid rgba(212, 175, 55, 0.2);
+            border-radius: 4px;
+            margin-bottom: 0.6rem;
+            overflow: hidden;
+        }
+        .route-plan-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.65rem 1rem;
+            background: rgba(212, 175, 55, 0.07);
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s;
+        }
+        .route-plan-header:hover { background: rgba(212, 175, 55, 0.15); }
+        .route-plan-header.selected { background: rgba(212, 175, 55, 0.22); border-bottom: 1px solid rgba(212, 175, 55, 0.3); }
+        .route-plan-title { color: var(--accent-gold); font-weight: 600; font-size: 0.92rem; }
+        .route-plan-meta { color: var(--text-gray); font-size: 0.80rem; }
+
+        /* 展开内容 */
+        .route-plan-body { display: none; padding: 0.8rem 1rem 0.6rem; }
+        .route-plan-body.open { display: block; }
+
+        /* 摘要统计 */
+        .plan-stats {
+            display: flex;
+            gap: 1.2rem;
+            margin-bottom: 0.7rem;
+            flex-wrap: wrap;
+        }
+        .plan-stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 60px;
+        }
+        .plan-stat-val {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--text-light);
+        }
+        .plan-stat-lbl {
+            font-size: 0.72rem;
+            color: var(--text-gray);
+            margin-top: 1px;
+        }
+
+        /* 地图提示标签 */
+        .map-route-hint {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.78rem;
+            color: var(--accent-gold);
+            background: rgba(212, 175, 55, 0.1);
+            padding: 0.25rem 0.6rem;
+            border-radius: 2px;
+            margin-bottom: 0.7rem;
+        }
+
+        /* 步骤展开按钮 */
+        .steps-toggle-btn {
+            background: transparent;
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            color: var(--text-gray);
+            font-size: 0.78rem;
+            padding: 0.25rem 0.7rem;
+            cursor: pointer;
+            border-radius: 2px;
+            margin-bottom: 0.6rem;
+            transition: all 0.2s;
+        }
+        .steps-toggle-btn:hover { border-color: var(--accent-gold); color: var(--accent-gold); }
+
+        /* 步骤列表 */
+        .steps-wrapper { display: none; }
+        .steps-wrapper.open { display: block; }
+        .step-list { list-style: none; padding: 0; margin: 0; }
+        .step-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.6rem;
+            padding: 0.35rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            font-size: 0.82rem;
+            color: var(--text-light);
+        }
+        .step-item:last-child { border-bottom: none; }
+        .step-dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: var(--accent-gold);
+            margin-top: 5px;
+            flex-shrink: 0;
+        }
+        .step-text { flex: 1; line-height: 1.5; }
+        .step-dist { color: var(--text-gray); font-size: 0.75rem; white-space: nowrap; }
+
+        /* 公交换乘段 */
+        .transit-seg {
+            display: flex;
+            align-items: stretch;
+            gap: 0.8rem;
+            padding: 0.4rem 0;
+        }
+        .transit-line {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 18px;
+            flex-shrink: 0;
+        }
+        .transit-dot {
+            width: 9px; height: 9px;
+            border-radius: 50%;
+            border: 2px solid var(--accent-gold);
+            flex-shrink: 0;
+        }
+        .transit-dot.walk-dot { border-color: var(--text-gray); }
+        .transit-connector {
+            width: 2px; flex: 1;
+            background: var(--accent-gold);
+            margin: 2px 0; min-height: 18px;
+        }
+        .transit-connector.walk-connector { background: transparent; border-left: 2px dashed var(--text-gray); width: 0; margin-left: 1px; }
+        .transit-info { flex: 1; padding-bottom: 0.5rem; }
+        .transit-line-name { font-size: 0.86rem; font-weight: 600; color: var(--text-light); }
+        .transit-line-name.walk-name { color: var(--text-gray); font-weight: 400; }
+        .transit-stops { font-size: 0.76rem; color: var(--text-gray); margin-top: 0.15rem; }
+
         /* Leaflet Custom Styles */
         .leaflet-popup-content-wrapper {
             background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%);
@@ -1830,48 +1977,41 @@
         
         function displayRoute(route) {
             const resultContainer = document.getElementById('routeResult');
-            
+
             let html = '<div class="route-result">';
             html += '<div class="section-title">推荐游览路线</div>';
-            
-            // Show note if custom locations are used
+
             const hasCustom = route.some(loc => loc.isCustom);
             if (hasCustom) {
-                html += `
-                    <div style="background: rgba(212, 175, 55, 0.1); border-left: 3px solid var(--accent-gold); padding: 1rem; margin-bottom: 1rem; color: var(--text-gray);">
-                        <strong style="color: var(--accent-gold);">提示：</strong>自定义地址的坐标为估算值。实际导航时，请使用专业地图应用输入完整地址以获取精确路线。
-                    </div>
-                `;
+                html += `<div style="background:rgba(212,175,55,0.1);border-left:3px solid var(--accent-gold);padding:1rem;margin-bottom:1rem;color:var(--text-gray);">
+                    <strong style="color:var(--accent-gold);">提示：</strong>自定义地址坐标已通过高德地图解析，如需精确导航请使用高德/百度地图 App。
+                </div>`;
             }
-            
+
             for (let i = 0; i < route.length - 1; i++) {
                 const from = route[i];
-                const to = route[i + 1];
+                const to   = route[i + 1];
                 const distance = calculateDistance(from.lat, from.lng, to.lat, to.lng).toFixed(2);
-                
-                const fromLabel = from.isCustom ? `自定义起点: ${from.name}` : 
-                                 (i === 0 ? `起点: ${from.name}` : `第${i}站: ${from.name}`);
-                const toLabel = to.isCustom ? `自定义终点: ${to.name}` : 
-                               (i === route.length - 2 ? `终点: ${to.name}` : `第${i+1}站: ${to.name}`);
-                
+
+                const fromLabel = from.isCustom ? `自定义起点: ${from.name}` :
+                                  (i === 0 ? `起点: ${from.name}` : `第${i}站: ${from.name}`);
+                const toLabel   = to.isCustom ? `自定义终点: ${to.name}` :
+                                  (i === route.length - 2 ? `终点: ${to.name}` : `第${i+1}站: ${to.name}`);
+
                 html += `
                     <div class="route-segment">
-                        <div class="route-segment-header">
-                            ${fromLabel} → ${toLabel}
-                        </div>
-                        <div style="color: var(--text-gray); margin-bottom: 0.5rem;">
-                            ${from.isCustom || to.isCustom ? '预估' : ''}距离约: ${distance} 公里
-                        </div>
+                        <div class="route-segment-header">${fromLabel} → ${toLabel}</div>
+                        <div style="color:var(--text-gray);margin-bottom:0.5rem;">直线距离约: ${distance} 公里</div>
                         <div class="transport-options">
-                            <button class="transport-btn" onclick="showTransportInfo('${from.name}', '${to.name}', 'driving')">🚗 驾车</button>
-                            <button class="transport-btn" onclick="showTransportInfo('${from.name}', '${to.name}', 'transit')">🚌 公交</button>
-                            <button class="transport-btn" onclick="showTransportInfo('${from.name}', '${to.name}', 'walking')">🚶 步行</button>
-                            <button class="transport-btn" onclick="showTransportInfo('${from.name}', '${to.name}', 'bicycling')">🚴 骑行</button>
+                            <button class="transport-btn" onclick="showTransportDetail(this,${i},'driving')">🚗 驾车</button>
+                            <button class="transport-btn" onclick="showTransportDetail(this,${i},'transit')">🚌 公交</button>
+                            <button class="transport-btn" onclick="showTransportDetail(this,${i},'walking')">🚶 步行</button>
+                            <button class="transport-btn" onclick="showTransportDetail(this,${i},'bicycling')">🚴 骑行</button>
                         </div>
-                    </div>
-                `;
+                        <div class="transport-detail" id="detail-${i}"></div>
+                    </div>`;
             }
-            
+
             html += '</div>';
             resultContainer.innerHTML = html;
         }
@@ -1925,96 +2065,238 @@
             map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
         }
         
-        async function showTransportInfo(fromName, toName, mode) {
-            console.log('showTransportInfo 调用:', fromName, toName, mode);
-            
-            // 显示加载提示
-            const loadingMsg = alert('正在规划路线，请稍候...');
-            
+        // 存储各段、各方案的步骤路径，供地图绘制
+        window._planSteps = {};
+        // 交通路线图层（与主路线层分开）
+        let transportRouteLayer = null;
+
+        async function showTransportDetail(btn, segIndex, mode) {
+            const detailEl = document.getElementById('detail-' + segIndex);
+            const segment = btn.closest('.route-segment');
+            const allBtns = segment.querySelectorAll('.transport-btn');
+
+            // 再次点击同一按钮则折叠并清除地图路线
+            if (btn.classList.contains('active')) {
+                btn.classList.remove('active');
+                detailEl.classList.remove('visible');
+                detailEl.innerHTML = '';
+                clearTransportRoute();
+                return;
+            }
+
+            // 切换 active 状态
+            allBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            const from = window.currentRoute[segIndex];
+            const to   = window.currentRoute[segIndex + 1];
+            const origin      = [from.lng, from.lat];
+            const destination = [to.lng,   to.lat];
+
+            const modeLabel = { driving:'驾车', transit:'公交', walking:'步行', bicycling:'骑行' };
+            detailEl.classList.add('visible');
+            detailEl.innerHTML = `<div style="color:var(--text-gray);font-size:0.85rem;padding:0.5rem 0;">
+                <span class="loading" style="vertical-align:middle;margin-right:0.5rem;"></span>正在规划${modeLabel[mode]}路线…</div>`;
+
             try {
-                // 从 route 数组中查找起点和终点的完整信息
-                // route 数组应该在 generateRoute 中被保存为全局变量
-                let fromLoc, toLoc;
-                
-                // 尝试从全局 currentRoute 中查找
-                if (window.currentRoute) {
-                    fromLoc = window.currentRoute.find(loc => loc.name === fromName);
-                    toLoc = window.currentRoute.find(loc => loc.name === toName);
-                }
-                
-                // 如果找不到，尝试从 locations 数组查找
-                if (!fromLoc) {
-                    fromLoc = locations.find(loc => loc.name === fromName);
-                }
-                if (!toLoc) {
-                    toLoc = locations.find(loc => loc.name === toName);
-                }
-                
-                // 如果还是找不到，使用武汉市中心作为默认坐标
-                if (!fromLoc || !toLoc) {
-                    console.warn('无法找到地点坐标，使用默认值');
-                    fromLoc = fromLoc || { lat: 30.5928, lng: 114.3055, name: fromName };
-                    toLoc = toLoc || { lat: 30.5928, lng: 114.3055, name: toName };
-                }
-                
-                console.log('起点坐标:', fromLoc);
-                console.log('终点坐标:', toLoc);
-                
-                // 构建坐标数组 [lng, lat]
-                const origin = [fromLoc.lng, fromLoc.lat];
-                const destination = [toLoc.lng, toLoc.lat];
-                
                 let result;
-                const modeNames = {
-                    'driving': '驾车',
-                    'transit': '公交',
-                    'walking': '步行',
-                    'bicycling': '骑行'
-                };
-                
-                // 根据交通方式调用相应的路线规划
-                switch(mode) {
-                    case 'driving':
-                        result = await RoutePlanningSystem.drivingRoute(origin, destination);
-                        break;
-                    case 'transit':
-                        result = await RoutePlanningSystem.transitRoute(origin, destination);
-                        break;
-                    case 'walking':
-                        result = await RoutePlanningSystem.walkingRoute(origin, destination);
-                        break;
-                    case 'bicycling':
-                        result = await RoutePlanningSystem.ridingRoute(origin, destination);
-                        break;
-                    default:
-                        result = { success: false, error: '未知的交通方式' };
+                if (mode === 'driving')   result = await RoutePlanningSystem.drivingRoute(origin, destination);
+                else if (mode === 'transit')  result = await RoutePlanningSystem.transitRoute(origin, destination);
+                else if (mode === 'walking')  result = await RoutePlanningSystem.walkingRoute(origin, destination);
+                else if (mode === 'bicycling') result = await RoutePlanningSystem.ridingRoute(origin, destination);
+
+                if (!result.success) {
+                    detailEl.innerHTML = `<div style="color:#e74c3c;font-size:0.85rem;padding:0.5rem 0;">规划失败：${result.error}</div>`;
+                    clearTransportRoute();
+                    return;
                 }
-                
-                console.log('路线规划结果:', result);
-                
-                if (result.success) {
-                    const distance = (result.distance / 1000).toFixed(2);
-                    const duration = Math.round(result.duration / 60);
-                    const cost = result.cost || result.tolls || 0;
-                    
-                    let message = `${modeNames[mode]}路线规划\n\n`;
-                    message += `从: ${fromName}\n`;
-                    message += `到: ${toName}\n\n`;
-                    message += `距离: ${distance} 公里\n`;
-                    message += `预计时间: ${duration} 分钟\n`;
-                    if (cost > 0) {
-                        message += `费用: ¥${cost}\n`;
-                    }
-                    
-                    alert(message);
+
+                const key = `${segIndex}-${mode}`;
+                if (mode === 'transit') {
+                    window._planSteps[key] = null; // 公交暂不绘制详细路径
+                    detailEl.innerHTML = renderTransitPlans(result.plans, key);
                 } else {
-                    alert('路线规划失败：' + result.error + '\n\n请检查：\n1. 高德地图API是否正确配置\n2. 起点和终点是否在武汉市内\n3. 浏览器控制台是否有错误信息');
+                    window._planSteps[key] = result.routes;
+                    detailEl.innerHTML = renderDrivingPlans(result.routes, mode, key);
+                    // 默认绘制第一条方案
+                    drawTransportRoute(key, 0, from, to);
                 }
-            } catch (error) {
-                console.error('路线规划出错:', error);
-                alert('路线规划出错：' + error.message + '\n\n请打开浏览器控制台(F12)查看详细错误信息');
+
+                // 默认展开第一个方案体
+                const firstBody = detailEl.querySelector('.route-plan-body');
+                if (firstBody) {
+                    firstBody.classList.add('open');
+                    const hdr = firstBody.previousElementSibling;
+                    if (hdr) hdr.classList.add('selected');
+                }
+
+            } catch (e) {
+                detailEl.innerHTML = `<div style="color:#e74c3c;font-size:0.85rem;padding:0.5rem 0;">出错：${e.message}</div>`;
             }
         }
+
+        function clearTransportRoute() {
+            if (transportRouteLayer) {
+                map.removeLayer(transportRouteLayer);
+                transportRouteLayer = null;
+            }
+        }
+
+        // 将路线绘制到 Leaflet 地图
+        function drawTransportRoute(key, planIdx, from, to) {
+            clearTransportRoute();
+            const plans = window._planSteps && window._planSteps[key];
+            if (!plans || !plans[planIdx]) {
+                // 无详细路径时画简单直线
+                transportRouteLayer = L.polyline([[from.lat, from.lng], [to.lat, to.lng]], {
+                    color: '#4a9eff', weight: 4, opacity: 0.75, dashArray: '8,5'
+                }).addTo(map);
+            } else {
+                const steps = plans[planIdx].steps || [];
+                let coords = [];
+                steps.forEach(s => {
+                    (s.path || []).forEach(([lng, lat]) => coords.push([lat, lng]));
+                });
+                if (coords.length < 2) {
+                    coords = [[from.lat, from.lng], [to.lat, to.lng]];
+                }
+                transportRouteLayer = L.polyline(coords, {
+                    color: '#4a9eff', weight: 5, opacity: 0.85
+                }).addTo(map);
+                map.fitBounds(transportRouteLayer.getBounds(), { padding: [60, 60] });
+            }
+        }
+
+        // 点击方案标题：手风琴展开 + 地图路线切换
+        function togglePlanBody(header, key, planIdx, fromIdx) {
+            const body = header.nextElementSibling;
+            const isOpen = body.classList.contains('open');
+            // 关闭同级所有方案
+            const allHeaders = header.closest('.transport-detail').querySelectorAll('.route-plan-header');
+            allHeaders.forEach(h => {
+                h.classList.remove('selected');
+                const b = h.nextElementSibling;
+                if (b) b.classList.remove('open');
+            });
+            if (!isOpen) {
+                body.classList.add('open');
+                header.classList.add('selected');
+                if (key && planIdx !== undefined) {
+                    const from = window.currentRoute[fromIdx];
+                    const to   = window.currentRoute[fromIdx + 1];
+                    drawTransportRoute(key, planIdx, from, to);
+                }
+            } else {
+                clearTransportRoute();
+            }
+        }
+
+        function toggleStepList(btn) {
+            const wrapper = btn.nextElementSibling;
+            const open = wrapper.classList.toggle('open');
+            btn.textContent = open ? '▲ 收起详细步骤' : '▼ 展开详细步骤';
+        }
+
+        function fmtDist(m) {
+            return m >= 1000 ? (m / 1000).toFixed(1) + ' 公里' : Math.round(m) + ' 米';
+        }
+        function fmtTime(s) {
+            if (s >= 3600) return Math.floor(s/3600) + ' 时 ' + Math.floor((s%3600)/60) + ' 分';
+            return Math.ceil(s / 60) + ' 分钟';
+        }
+
+        function renderDrivingPlans(routes, mode, key) {
+            const icons = { driving:'🚗', walking:'🚶', bicycling:'🚴' };
+            const segIdx = key.split('-')[0];
+            let html = '';
+            routes.forEach((r, idx) => {
+                const tolls = r.tolls > 0 ? `¥${r.tolls}` : '';
+                html += `<div class="route-plan">
+                    <div class="route-plan-header" onclick="togglePlanBody(this,'${key}',${idx},${segIdx})">
+                        <span class="route-plan-title">${icons[mode] || ''} 方案 ${idx + 1}</span>
+                        <span class="route-plan-meta">${fmtTime(r.duration)} · ${fmtDist(r.distance)}${tolls ? ' · ' + tolls : ''}</span>
+                    </div>
+                    <div class="route-plan-body">
+                        <div class="plan-stats">
+                            <div class="plan-stat"><span class="plan-stat-val">${fmtTime(r.duration)}</span><span class="plan-stat-lbl">预计用时</span></div>
+                            <div class="plan-stat"><span class="plan-stat-val">${fmtDist(r.distance)}</span><span class="plan-stat-lbl">总距离</span></div>
+                            ${r.tolls > 0 ? `<div class="plan-stat"><span class="plan-stat-val">¥${r.tolls}</span><span class="plan-stat-lbl">过路费</span></div>` : ''}
+                        </div>
+                        <div class="map-route-hint">📍 路线已标注在地图上</div>`;
+                const steps = (r.steps || []).filter(s => s.instruction);
+                if (steps.length > 0) {
+                    html += `<button class="steps-toggle-btn" onclick="toggleStepList(this)">▼ 展开详细步骤</button>
+                        <div class="steps-wrapper">
+                            <ul class="step-list">`;
+                    steps.forEach(step => {
+                        html += `<li class="step-item">
+                            <span class="step-dot"></span>
+                            <span class="step-text">${step.instruction}</span>
+                            <span class="step-dist">${step.distance > 0 ? fmtDist(step.distance) : ''}</span>
+                        </li>`;
+                    });
+                    html += `</ul></div>`;
+                }
+                html += `   </div></div>`;
+            });
+            return html;
+        }
+
+        function renderTransitPlans(plans, key) {
+            const segIdx = key.split('-')[0];
+            let html = '';
+            plans.forEach((plan, idx) => {
+                const walkKm = plan.walking_distance > 0 ? fmtDist(plan.walking_distance) : '';
+                const cost   = plan.cost > 0 ? `¥${plan.cost}` : '免费';
+                html += `<div class="route-plan">
+                    <div class="route-plan-header" onclick="togglePlanBody(this,'${key}',${idx},${segIdx})">
+                        <span class="route-plan-title">🚌 方案 ${idx + 1}</span>
+                        <span class="route-plan-meta">${fmtTime(plan.duration)} · ${cost}</span>
+                    </div>
+                    <div class="route-plan-body">
+                        <div class="plan-stats">
+                            <div class="plan-stat"><span class="plan-stat-val">${fmtTime(plan.duration)}</span><span class="plan-stat-lbl">预计用时</span></div>
+                            <div class="plan-stat"><span class="plan-stat-val">${fmtDist(plan.distance)}</span><span class="plan-stat-lbl">总距离</span></div>
+                            ${walkKm ? `<div class="plan-stat"><span class="plan-stat-val">${walkKm}</span><span class="plan-stat-lbl">步行距离</span></div>` : ''}
+                            <div class="plan-stat"><span class="plan-stat-val">${cost}</span><span class="plan-stat-lbl">票价</span></div>
+                        </div>`;
+                (plan.segments || []).forEach((seg, si) => {
+                    const isLast = si === plan.segments.length - 1;
+                    if (seg.type === 'walk') {
+                        html += `<div class="transit-seg">
+                            <div class="transit-line">
+                                <div class="transit-dot walk-dot"></div>
+                                ${!isLast ? '<div class="transit-connector walk-connector"></div>' : ''}
+                            </div>
+                            <div class="transit-info">
+                                <div class="transit-line-name walk-name">🚶 步行 ${fmtDist(seg.distance)}</div>
+                                <div class="transit-stops">${fmtTime(seg.duration)}</div>
+                            </div>
+                        </div>`;
+                    } else {
+                        html += `<div class="transit-seg">
+                            <div class="transit-line">
+                                <div class="transit-dot"></div>
+                                ${!isLast ? '<div class="transit-connector"></div>' : ''}
+                            </div>
+                            <div class="transit-info">
+                                <div class="transit-line-name">${seg.line}</div>
+                                <div class="transit-stops">
+                                    ${seg.departure || ''} → ${seg.arrival || ''}
+                                    ${seg.via_stops > 0 ? '（经过 ' + seg.via_stops + ' 站）' : ''}
+                                    · ${fmtTime(seg.duration)}
+                                </div>
+                            </div>
+                        </div>`;
+                    }
+                });
+                html += `   </div></div>`;
+            });
+            return html;
+        }
+
+        // 保留旧函数名兼容性
+        async function showTransportInfo(fromName, toName, mode) {}
         
         // Close modal when clicking outside
         window.onclick = function(event) {
@@ -2028,7 +2310,7 @@
     </script>
     <!-- 引入配置文件 -->
     <script src="supabase-config.js"></script>
-    <script src="amap-config.js?v=3"></script>
+    <script src="amap-config.js?v=4"></script>
 
     <!-- 初始化认证状态 -->
     <script>

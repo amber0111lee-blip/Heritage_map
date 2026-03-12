@@ -2,8 +2,7 @@
 // 高德地图配置
 // ======================================
 
-// 替换为你的高德地图 Key
-const AMAP_KEY = 'e4f9114d0564a5cbb8854bdde336a3b1';  // 从第二部分步骤 2.3 获取
+const AMAP_KEY = 'e4f9114d0564a5cbb8854bdde336a3b1';
 
 // ======================================
 // 地理编码系统
@@ -23,7 +22,6 @@ const GeocodingSystem = {
         resolve({ success: false, error: '地址解析超时，请检查：\n1. API Key 是否为"Web端(JS API)"类型\n2. 网络连接是否正常\n3. 请打开F12控制台查看具体错误' });
       }, 10000);
 
-      // 使用 AMap.plugin() 确保插件完全就绪再调用
       AMap.plugin('AMap.Geocoder', function() {
         try {
           const geocoder = new AMap.Geocoder({ city: '武汉' });
@@ -53,26 +51,6 @@ const GeocodingSystem = {
         }
       });
     });
-  },
-  
-  // 坐标转地址
-  async reverseGeocode(lng, lat) {
-    if (!this.geocoder) {
-      this.init();
-    }
-    
-    return new Promise((resolve) => {
-      this.geocoder.getAddress([lng, lat], (status, result) => {
-        if (status === 'complete' && result.info === 'OK') {
-          resolve({
-            success: true,
-            formattedAddress: result.regeocode.formattedAddress
-          });
-        } else {
-          resolve({ success: false, error: '逆向地理编码失败' });
-        }
-      });
-    });
   }
 };
 
@@ -81,22 +59,29 @@ const GeocodingSystem = {
 // ======================================
 
 const RoutePlanningSystem = {
-  // 驾车路线
+  // 驾车路线 — 返回多条备选 + 每条的详细步骤
   async drivingRoute(origin, destination) {
     return new Promise((resolve) => {
-      console.log('规划驾车路线:', origin, destination);
       AMap.plugin('AMap.Driving', function() {
         try {
           const policy = (AMap.DrivingPolicy && AMap.DrivingPolicy.LEAST_TIME) || 0;
           const driving = new AMap.Driving({ policy });
           driving.search(origin, destination, (status, result) => {
-            console.log('驾车路线结果:', status, result);
-            if (status === 'complete' && result.info === 'OK') {
-              const route = result.routes[0];
-              resolve({ success: true, distance: route.distance, duration: route.time, tolls: route.tolls || 0 });
+            if (status === 'complete' && result.routes && result.routes.length > 0) {
+              const routes = result.routes.slice(0, 3).map(route => ({
+                distance: route.distance,
+                duration: route.time,
+                tolls: route.tolls || 0,
+                steps: (route.steps || []).map(s => ({
+                  instruction: s.instruction || s.road || '',
+                  distance: s.distance || 0,
+                  duration: s.time || 0,
+                  path: (s.path || []).map(p => [p.lng !== undefined ? p.lng : p[0], p.lat !== undefined ? p.lat : p[1]])
+                }))
+              }));
+              resolve({ success: true, routes });
             } else {
               const errCode = (result && result.info) || status || '未知';
-              console.error('驾车路线失败，错误码:', errCode);
               resolve({ success: false, error: '驾车路线规划失败 [错误码: ' + errCode + ']' });
             }
           });
@@ -107,21 +92,33 @@ const RoutePlanningSystem = {
     });
   },
 
-  // 步行路线
+  // 步行路线 — 兼容 AMap 2.0 的 info='ok'（小写）及 route/routes 两种结构
   async walkingRoute(origin, destination) {
     return new Promise((resolve) => {
-      console.log('规划步行路线:', origin, destination);
       AMap.plugin('AMap.Walking', function() {
         try {
           const walking = new AMap.Walking();
           walking.search(origin, destination, (status, result) => {
-            console.log('步行路线结果:', status, result);
-            if (status === 'complete' && result.info === 'OK') {
-              const route = result.routes[0];
-              resolve({ success: true, distance: route.distance, duration: route.time });
+            const routes = result && (result.routes || (result.route ? [result.route] : null));
+            const info = result && result.info;
+            const ok = status === 'complete' || (info && info.toUpperCase() === 'OK');
+            if (ok && routes && routes.length > 0) {
+              const r = routes[0];
+              resolve({
+                success: true,
+                routes: [{
+                  distance: r.distance,
+                  duration: r.time,
+                  steps: (r.steps || []).map(s => ({
+                    instruction: s.instruction || '',
+                    distance: s.distance || 0,
+                    duration: s.time || 0,
+                    path: (s.path || []).map(p => [p.lng !== undefined ? p.lng : p[0], p.lat !== undefined ? p.lat : p[1]])
+                  }))
+                }]
+              });
             } else {
-              const errCode = (result && result.info) || status || '未知';
-              console.error('步行路线失败，错误码:', errCode);
+              const errCode = info || status || '未知';
               resolve({ success: false, error: '步行路线规划失败 [错误码: ' + errCode + ']' });
             }
           });
@@ -132,22 +129,47 @@ const RoutePlanningSystem = {
     });
   },
 
-  // 公交路线
+  // 公交路线 — 返回多个备选方案 + 每方案的换乘段信息
   async transitRoute(origin, destination) {
     return new Promise((resolve) => {
-      console.log('规划公交路线:', origin, destination);
       AMap.plugin('AMap.Transfer', function() {
         try {
           const policy = (AMap.TransferPolicy && AMap.TransferPolicy.LEAST_TIME) || 0;
           const transfer = new AMap.Transfer({ city: '武汉', policy });
           transfer.search(origin, destination, (status, result) => {
-            console.log('公交路线结果:', status, result);
-            if (status === 'complete' && result.info === 'OK' && result.plans.length > 0) {
-              const plan = result.plans[0];
-              resolve({ success: true, distance: plan.distance, duration: plan.time, cost: plan.cost || 0 });
+            if (status === 'complete' && result.plans && result.plans.length > 0) {
+              const plans = result.plans.slice(0, 3).map(plan => {
+                const segments = (plan.segments || []).map(seg => {
+                  if (seg.transit_mode === 'WALK' || !seg.transit) {
+                    return {
+                      type: 'walk',
+                      distance: seg.distance || 0,
+                      duration: seg.time || 0,
+                      instruction: seg.instruction || '步行'
+                    };
+                  }
+                  const t = seg.transit;
+                  return {
+                    type: 'vehicle',
+                    line: t.name || (t.lines && t.lines[0] && t.lines[0].name) || '公交',
+                    departure: t.departure_stop && t.departure_stop.name,
+                    arrival: t.arrival_stop && t.arrival_stop.name,
+                    via_stops: t.via_num || 0,
+                    distance: seg.distance || 0,
+                    duration: seg.time || 0
+                  };
+                });
+                return {
+                  distance: plan.distance,
+                  duration: plan.time,
+                  cost: plan.cost || 0,
+                  walking_distance: plan.walking_distance || 0,
+                  segments
+                };
+              });
+              resolve({ success: true, plans });
             } else {
               const errCode = (result && result.info) || status || '未知';
-              console.error('公交路线失败，错误码:', errCode);
               resolve({ success: false, error: '公交路线规划失败 [错误码: ' + errCode + ']' });
             }
           });
@@ -161,18 +183,28 @@ const RoutePlanningSystem = {
   // 骑行路线
   async ridingRoute(origin, destination) {
     return new Promise((resolve) => {
-      console.log('规划骑行路线:', origin, destination);
       AMap.plugin('AMap.Riding', function() {
         try {
           const riding = new AMap.Riding();
           riding.search(origin, destination, (status, result) => {
-            console.log('骑行路线结果:', status, result);
-            if (status === 'complete' && result.info === 'OK') {
-              const route = result.routes[0];
-              resolve({ success: true, distance: route.distance, duration: route.time });
+            const routes = result && (result.routes || (result.route ? [result.route] : null));
+            if (status === 'complete' && routes && routes.length > 0) {
+              const r = routes[0];
+              resolve({
+                success: true,
+                routes: [{
+                  distance: r.distance,
+                  duration: r.time,
+                  steps: (r.steps || []).map(s => ({
+                    instruction: s.instruction || '',
+                    distance: s.distance || 0,
+                    duration: s.time || 0,
+                    path: (s.path || []).map(p => [p.lng !== undefined ? p.lng : p[0], p.lat !== undefined ? p.lat : p[1]])
+                  }))
+                }]
+              });
             } else {
               const errCode = (result && result.info) || status || '未知';
-              console.error('骑行路线失败，错误码:', errCode);
               resolve({ success: false, error: '骑行路线规划失败 [错误码: ' + errCode + ']' });
             }
           });
@@ -181,30 +213,17 @@ const RoutePlanningSystem = {
         }
       });
     });
-  },
-  
-  // 综合路线（所有交通方式）
-  async comprehensiveRoute(origin, destination) {
-    const [driving, walking, transit, riding] = await Promise.all([
-      this.drivingRoute(origin, destination),
-      this.walkingRoute(origin, destination),
-      this.transitRoute(origin, destination),
-      this.ridingRoute(origin, destination)
-    ]);
-    
-    return { driving, walking, transit, riding };
   }
 };
 
 // 页面加载完成后检查 AMap 状态
 window.addEventListener('load', () => {
   if (window.AMap) {
-    console.log('AMap 加载成功，版本:', AMap.version || '未知');
+    console.log('AMap 加载成功');
   } else {
     console.error('AMap 未加载！请检查 API Key 和网络连接');
   }
 });
 
-// 导出到全局
 window.GeocodingSystem = GeocodingSystem;
 window.RoutePlanningSystem = RoutePlanningSystem;
