@@ -81,7 +81,7 @@ const AuthSystem = {
   
   // 监听认证状态
   onAuthStateChange(callback) {
-    supabase.auth.onAuthStateChanged((event, session) => {
+    supabase.auth.onAuthStateChange((event, session) => {
       callback(session?.user || null);
     });
   }
@@ -365,8 +365,271 @@ const CustomMapSystem = {
   }
 };
 
+// ======================================
+// 地图系统
+// ======================================
+
+const MapSystem = {
+  // 获取公开地图列表（含地点数量）
+  async getMaps(limit = 20) {
+    try {
+      const { data, error } = await supabase
+        .from('custom_maps')
+        .select('*')
+        .eq('is_public', true)
+        .order('is_example', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return { success: true, maps: data };
+    } catch (error) {
+      console.error('获取地图列表失败:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // 获取单张地图
+  async getMapById(mapId) {
+    try {
+      const { data, error } = await supabase
+        .from('custom_maps')
+        .select('*')
+        .eq('id', mapId)
+        .single();
+      if (error) throw error;
+      return { success: true, map: data };
+    } catch (error) {
+      console.error('获取地图失败:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // 创建地图
+  async createMap(title, description, theme, isPublic) {
+    try {
+      const user = await AuthSystem.getCurrentUser();
+      if (!user) return { success: false, error: '请先登录' };
+
+      const { data, error } = await supabase
+        .from('custom_maps')
+        .insert({
+          title,
+          description,
+          theme: theme || '人文历史',
+          is_public: isPublic !== false,
+          created_by: user.id,
+          creator_name: user.user_metadata?.display_name || user.email,
+          saves: 0,
+          views: 0
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return { success: true, map: data };
+    } catch (error) {
+      console.error('创建地图失败:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // 收藏地图
+  async saveMap(mapId) {
+    try {
+      const user = await AuthSystem.getCurrentUser();
+      if (!user) return { success: false, error: '请先登录' };
+
+      const { error } = await supabase
+        .from('map_saves')
+        .insert({ user_id: user.id, map_id: mapId });
+      if (error) throw error;
+
+      await supabase.rpc('increment_map_saves', { map_id: mapId });
+      return { success: true };
+    } catch (error) {
+      console.error('收藏失败:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // 取消收藏
+  async unsaveMap(mapId) {
+    try {
+      const user = await AuthSystem.getCurrentUser();
+      if (!user) return { success: false, error: '请先登录' };
+
+      const { error } = await supabase
+        .from('map_saves')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('map_id', mapId);
+      if (error) throw error;
+
+      await supabase.rpc('decrement_map_saves', { map_id: mapId });
+      return { success: true };
+    } catch (error) {
+      console.error('取消收藏失败:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // 检查是否已收藏
+  async isSaved(mapId) {
+    try {
+      const user = await AuthSystem.getCurrentUser();
+      if (!user) return false;
+
+      const { data } = await supabase
+        .from('map_saves')
+        .select('user_id')
+        .eq('user_id', user.id)
+        .eq('map_id', mapId)
+        .single();
+      return !!data;
+    } catch {
+      return false;
+    }
+  },
+
+  // 获取当前用户创建的地图
+  async getUserMaps() {
+    try {
+      const user = await AuthSystem.getCurrentUser();
+      if (!user) return { success: false, error: '请先登录' };
+
+      const { data, error } = await supabase
+        .from('custom_maps')
+        .select('*')
+        .eq('created_by', user.id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return { success: true, maps: data };
+    } catch (error) {
+      console.error('获取用户地图失败:', error);
+      return { success: false, error: error.message };
+    }
+  }
+};
+
+// ======================================
+// 地图地点系统
+// ======================================
+
+const MapLocationSystem = {
+  // 添加地点
+  async addLocation(mapId, data) {
+    try {
+      const { data: row, error } = await supabase
+        .from('map_locations')
+        .insert({ map_id: mapId, ...data })
+        .select()
+        .single();
+      if (error) throw error;
+      return { success: true, location: row };
+    } catch (error) {
+      console.error('添加地点失败:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // 更新地点
+  async updateLocation(locationId, data) {
+    try {
+      const { error } = await supabase
+        .from('map_locations')
+        .update(data)
+        .eq('id', locationId);
+      if (error) throw error;
+      return { success: true };
+    } catch (error) {
+      console.error('更新地点失败:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // 删除地点
+  async deleteLocation(locationId) {
+    try {
+      const { error } = await supabase
+        .from('map_locations')
+        .delete()
+        .eq('id', locationId);
+      if (error) throw error;
+      return { success: true };
+    } catch (error) {
+      console.error('删除地点失败:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // 获取地图的所有地点
+  async getLocations(mapId) {
+    try {
+      const { data, error } = await supabase
+        .from('map_locations')
+        .select('*')
+        .eq('map_id', mapId)
+        .order('sort_order', { ascending: true });
+      if (error) throw error;
+      return { success: true, locations: data };
+    } catch (error) {
+      console.error('获取地点失败:', error);
+      return { success: false, error: error.message };
+    }
+  }
+};
+
+// ======================================
+// 地图评论系统（地图级别）
+// ======================================
+
+const MapCommentSystem = {
+  // 发表评论
+  async addComment(mapId, text, rating) {
+    try {
+      const user = await AuthSystem.getCurrentUser();
+      if (!user) return { success: false, error: '请先登录' };
+
+      const { data, error } = await supabase
+        .from('map_comments')
+        .insert({
+          map_id: mapId,
+          user_id: user.id,
+          author_name: user.user_metadata?.display_name || user.email,
+          text,
+          rating: rating || 5
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return { success: true, comment: data };
+    } catch (error) {
+      console.error('发表评论失败:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // 获取评论列表
+  async getComments(mapId) {
+    try {
+      const { data, error } = await supabase
+        .from('map_comments')
+        .select('*')
+        .eq('map_id', mapId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return { success: true, comments: data };
+    } catch (error) {
+      console.error('获取评论失败:', error);
+      return { success: false, error: error.message };
+    }
+  }
+};
+
 // 导出到全局
 window.AuthSystem = AuthSystem;
 window.CommentSystem = CommentSystem;
 window.ImageSystem = ImageSystem;
 window.CustomMapSystem = CustomMapSystem;
+window.MapSystem = MapSystem;
+window.MapLocationSystem = MapLocationSystem;
+window.MapCommentSystem = MapCommentSystem;
