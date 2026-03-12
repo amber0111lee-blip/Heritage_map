@@ -24,7 +24,7 @@ const GeocodingSystem = {
 
       AMap.plugin('AMap.Geocoder', function() {
         try {
-          const geocoder = new AMap.Geocoder({ city: '武汉' });
+          const geocoder = new AMap.Geocoder();
           console.log('正在解析地址:', address);
 
           geocoder.getLocation(address, (status, result) => {
@@ -135,7 +135,7 @@ const RoutePlanningSystem = {
       AMap.plugin('AMap.Transfer', function() {
         try {
           const policy = (AMap.TransferPolicy && AMap.TransferPolicy.LEAST_TIME) || 0;
-          const transfer = new AMap.Transfer({ city: '武汉', policy });
+          const transfer = new AMap.Transfer({ policy });
           transfer.search(origin, destination, (status, result) => {
             if (status === 'complete' && result.plans && result.plans.length > 0) {
               const plans = result.plans.slice(0, 3).map(plan => {
