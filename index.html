@@ -266,11 +266,33 @@ nav>button:hover{border-color:var(--accent-gold);box-shadow:0 0 12px rgba(212,17
 <div class="modal-content" style="max-width:480px">
 <div class="modal-header"><h2 id="authModalTitle">登录</h2><button class="close-btn" onclick="closeModal('loginModal')">&times;</button></div>
 <div class="modal-body">
-<div class="form-group"><label>邮箱</label><input type="email" id="loginEmail" placeholder="请输入邮箱"></div>
-<div class="form-group"><label>密码</label><input type="password" id="loginPassword" placeholder="请输入密码"></div>
-<div id="signupNameField" class="form-group" style="display:none"><label>昵称</label><input type="text" id="signupName" placeholder="请输入昵称"></div>
-<button id="authSubmitBtn" onclick="handleAuth()" class="btn-primary" style="width:100%;margin-top:0.5rem">登录</button>
-<div style="text-align:center;margin-top:1rem"><span style="color:var(--text-gray)" id="authSwitchText">还没有账号？</span><button onclick="switchAuthMode()" style="background:transparent;border:none;color:var(--accent-gold);cursor:pointer;text-decoration:underline" id="authSwitchBtn">注册</button></div>
+  <div id="authPanel">
+    <div class="form-group"><label>邮箱</label><input type="email" id="loginEmail" placeholder="请输入邮箱"></div>
+    <div class="form-group"><label>密码</label><input type="password" id="loginPassword" placeholder="请输入密码（至少6位）"></div>
+    <div id="signupNameField" class="form-group" style="display:none"><label>昵称</label><input type="text" id="signupName" placeholder="请输入昵称"></div>
+    <button id="authSubmitBtn" onclick="handleAuth()" class="btn-primary" style="width:100%;margin-top:0.5rem">登录</button>
+    <div style="text-align:center;margin-top:1rem"><span style="color:var(--text-gray)" id="authSwitchText">还没有账号？</span><button onclick="switchAuthMode()" style="background:transparent;border:none;color:var(--accent-gold);cursor:pointer;text-decoration:underline" id="authSwitchBtn">注册</button></div>
+  </div>
+  <div id="otpPanel" style="display:none">
+    <div style="text-align:center;margin-bottom:1.5rem">
+      <div style="font-size:2rem;margin-bottom:0.5rem">📧</div>
+      <p style="color:var(--text-light);font-weight:600;margin-bottom:0.4rem">验证码已发送</p>
+      <p style="color:var(--text-gray);font-size:0.85rem">请查收发送至 <span id="otpEmailDisplay" style="color:var(--accent-gold)"></span> 的邮件</p>
+    </div>
+    <div class="form-group">
+      <label>6位验证码</label>
+      <input type="text" id="otpInput" placeholder="请输入验证码" maxlength="6" style="letter-spacing:0.4rem;font-size:1.2rem;text-align:center" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+    </div>
+    <button id="otpSubmitBtn" onclick="handleVerifyOtp()" class="btn-primary" style="width:100%;margin-top:0.5rem">验证并完成注册</button>
+    <div style="text-align:center;margin-top:1rem">
+      <span style="color:var(--text-gray);font-size:0.85rem">没收到？</span>
+      <button id="resendBtn" onclick="resendOtp()" style="background:transparent;border:none;color:var(--accent-gold);cursor:pointer;text-decoration:underline;font-size:0.85rem">重新发送</button>
+      <span id="resendCountdown" style="color:var(--text-gray);font-size:0.85rem;display:none"></span>
+    </div>
+    <div style="text-align:center;margin-top:0.5rem">
+      <button onclick="backToAuthPanel()" style="background:transparent;border:none;color:var(--text-gray);cursor:pointer;font-size:0.82rem">← 返回修改信息</button>
+    </div>
+  </div>
 </div></div></div>
 <div id="tour-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9000;align-items:center;justify-content:center">
 <div style="background:#2d2d2d;border:2px solid var(--accent-gold);border-radius:8px;padding:2rem;max-width:480px;width:90%;text-align:center">
@@ -372,6 +394,10 @@ function requireLogin(fn) {
 
 // ===== AUTH =====
 let authMode = 'login';
+let pendingSignupEmail = '';
+let pendingSignupName = '';
+let resendTimer = null;
+
 function showLoginModal() {
   authMode='login';
   document.getElementById('authModalTitle').textContent='登录';
@@ -379,8 +405,11 @@ function showLoginModal() {
   document.getElementById('authSwitchText').textContent='还没有账号？';
   document.getElementById('authSwitchBtn').textContent='注册';
   document.getElementById('signupNameField').style.display='none';
+  document.getElementById('authPanel').style.display='block';
+  document.getElementById('otpPanel').style.display='none';
   document.getElementById('loginModal').style.display='flex';
 }
+
 function switchAuthMode() {
   authMode = authMode==='login'?'signup':'login';
   const isLogin = authMode==='login';
@@ -390,28 +419,103 @@ function switchAuthMode() {
   document.getElementById('authSwitchBtn').textContent=isLogin?'注册':'登录';
   document.getElementById('signupNameField').style.display=isLogin?'none':'block';
 }
+
+function backToAuthPanel() {
+  document.getElementById('authPanel').style.display='block';
+  document.getElementById('otpPanel').style.display='none';
+  document.getElementById('authModalTitle').textContent='注册';
+  if(resendTimer){ clearInterval(resendTimer); resendTimer=null; }
+}
+
 async function handleAuth() {
   const email=document.getElementById('loginEmail').value.trim();
   const password=document.getElementById('loginPassword').value;
   if(!email||!password){ alert('请填写邮箱和密码'); return; }
   const btn=document.getElementById('authSubmitBtn');
   btn.disabled=true; btn.textContent='请稍候...';
-  let result;
+
   if(authMode==='signup'){
     const name=document.getElementById('signupName').value.trim()||'用户';
-    result=await AuthSystem.signUp(email,password,name);
+    const result=await AuthSystem.signUp(email,password,name);
+    btn.disabled=false; btn.textContent='注册';
+    if(result.success){
+      pendingSignupEmail=email;
+      pendingSignupName=name;
+      document.getElementById('authPanel').style.display='none';
+      document.getElementById('otpPanel').style.display='block';
+      document.getElementById('authModalTitle').textContent='验证邮箱';
+      document.getElementById('otpEmailDisplay').textContent=email;
+      document.getElementById('otpInput').value='';
+      startResendCountdown();
+    } else {
+      alert(result.error||'注册失败，请重试');
+    }
   } else {
-    result=await AuthSystem.signIn(email,password);
+    const result=await AuthSystem.signIn(email,password);
+    btn.disabled=false; btn.textContent='登录';
+    if(result.success){
+      closeModal('loginModal');
+      document.getElementById('loginEmail').value='';
+      document.getElementById('loginPassword').value='';
+    } else {
+      alert(result.error||'登录失败，请检查邮箱和密码');
+    }
   }
-  btn.disabled=false; btn.textContent=authMode==='login'?'登录':'注册';
+}
+
+async function handleVerifyOtp() {
+  const token=document.getElementById('otpInput').value.trim();
+  if(!token||token.length!==6){ alert('请输入6位验证码'); return; }
+  const btn=document.getElementById('otpSubmitBtn');
+  btn.disabled=true; btn.textContent='验证中...';
+  const result=await AuthSystem.verifyOtp(pendingSignupEmail, token);
+  btn.disabled=false; btn.textContent='验证并完成注册';
   if(result.success){
+    if(resendTimer){ clearInterval(resendTimer); resendTimer=null; }
     closeModal('loginModal');
     document.getElementById('loginEmail').value='';
     document.getElementById('loginPassword').value='';
+    document.getElementById('otpInput').value='';
+    pendingSignupEmail='';
   } else {
-    alert(result.error||'操作失败，请重试');
+    alert(result.error||'验证码错误或已过期，请重试');
   }
 }
+
+async function resendOtp() {
+  if(!pendingSignupEmail) return;
+  const btn=document.getElementById('resendBtn');
+  btn.disabled=true;
+  const password=document.getElementById('loginPassword').value;
+  const result=await AuthSystem.signUp(pendingSignupEmail, password, pendingSignupName);
+  btn.disabled=false;
+  if(result.success){
+    alert('验证码已重新发送，请查收邮件');
+    startResendCountdown();
+  } else {
+    alert(result.error||'发送失败，请稍后重试');
+  }
+}
+
+function startResendCountdown() {
+  let seconds=60;
+  const btn=document.getElementById('resendBtn');
+  const countdown=document.getElementById('resendCountdown');
+  btn.style.display='none';
+  countdown.style.display='inline';
+  countdown.textContent='（'+seconds+'秒后可重新发送）';
+  if(resendTimer) clearInterval(resendTimer);
+  resendTimer=setInterval(()=>{
+    seconds--;
+    countdown.textContent='（'+seconds+'秒后可重新发送）';
+    if(seconds<=0){
+      clearInterval(resendTimer); resendTimer=null;
+      btn.style.display='inline';
+      countdown.style.display='none';
+    }
+  },1000);
+}
+
 async function handleSignOut() {
   await AuthSystem.signOut();
   currentUser=null;

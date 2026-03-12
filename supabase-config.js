@@ -64,6 +64,22 @@ const AuthSystem = {
     }
   },
   
+  // 验证注册OTP验证码
+  async verifyOtp(email, token) {
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: email,
+        token: token,
+        type: 'signup'
+      });
+      if (error) throw error;
+      return { success: true, user: data.user };
+    } catch (error) {
+      console.error('验证码验证失败:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
   // 登出
   async signOut() {
     try {
