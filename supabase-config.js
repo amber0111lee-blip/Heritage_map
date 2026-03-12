@@ -7,6 +7,9 @@ const SUPABASE_URL = 'https://twabqwjndecjcdbldgpr.supabase.co';  // 从步骤 1
 const SUPABASE_ANON_KEY = 'sb_publishable_VWDn7SFM6X6uw_OvC39LGA_z6WeHowE';  // 从步骤 1.3 获取
 
 // 初始化 Supabase 客户端
+if (!window.supabase) {
+  throw new Error('Supabase CDN 未加载，请检查网络连接或 CDN 地址');
+}
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ======================================
