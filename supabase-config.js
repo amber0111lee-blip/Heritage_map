@@ -3,8 +3,12 @@
 // ======================================
 
 // 替换为你的 Supabase 项目信息
-const SUPABASE_URL = 'https://twabqwjndecjcdbldgpr.supabase.co';  // 从步骤 1.3 获取
-const SUPABASE_ANON_KEY = 'sb_publishable_VWDn7SFM6X6uw_OvC39LGA_z6WeHowE';  // 从步骤 1.3 获取
+const SUPABASE_URL = 'https://twabqwjndecjcdbldgpr.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_VWDn7SFM6X6uw_OvC39LGA_z6WeHowE';
+
+// ✅ 修改这里：替换为你的实际部署地址
+// 本地开发时用 'http://localhost:3000'，上线后换成正式域名
+const SITE_URL = window.location.origin;
 
 // 初始化 Supabase 客户端
 if (!window.supabase) {
@@ -26,7 +30,9 @@ const AuthSystem = {
         options: {
           data: {
             display_name: displayName
-          }
+          },
+          // ✅ 新增：告知 Supabase 用户点击邮件确认链接后跳回哪个页面
+          emailRedirectTo: SITE_URL + '/index.html'
         }
       });
       
@@ -524,6 +530,23 @@ const MapSystem = {
       return { success: true, maps: data };
     } catch (error) {
       console.error('获取用户地图失败:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  async deleteMap(mapId) {
+    try {
+      const user = await AuthSystem.getCurrentUser();
+      if (!user) return { success: false, error: '请先登录' };
+      const { error: locErr } = await supabase
+        .from('map_locations').delete().eq('map_id', mapId);
+      if (locErr) console.warn('删除地点警告:', locErr.message);
+      const { error } = await supabase
+        .from('custom_maps').delete().eq('id', mapId).eq('created_by', user.id);
+      if (error) throw error;
+      return { success: true };
+    } catch (error) {
+      console.error('删除地图失败:', error);
       return { success: false, error: error.message };
     }
   }
